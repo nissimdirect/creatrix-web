@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>CREATRIX</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>◆</text></svg>">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap');
+
+  :root {
+    --bg: #1e1e1e;
+    --bg-card: #242424;
+    --text: #cccc78;
+    --text-brt: #e6e68c;
+    --text-dim: #8c8c48;
+    --text-ghost: #464624;
+    --violet: #7b61ff;
+    --red: #ff2d2d;
+    --border: #50502b;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', 'Menlo', 'Courier New', monospace;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  .frame {
+    width: min(720px, 100vw - 16px);
+    min-height: 100dvh;
+    border-left: 2px solid var(--border);
+    border-right: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  .frame-top, .frame-bot {
+    font-size: 11px;
+    color: var(--border);
+    padding: 4px 8px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  /* Mode Tabs */
+  .tabs {
+    display: flex;
+    gap: 12px;
+    padding: 12px 16px 8px;
+    font-size: 14px;
+  }
+  .tab {
+    cursor: pointer;
+    padding: 2px 4px;
+    transition: color 0.2s;
+  }
+  .tab.active { color: var(--text-brt); }
+  .tab:not(.active) { color: var(--text-ghost); }
+  .tab:hover:not(.active) { color: var(--text-dim); }
+
+  .separator {
+    font-size: 11px;
+    color: var(--border);
+    padding: 0 8px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  /* Title */
+  .title-area {
+    text-align: center;
+    padding: 16px 0 8px;
+  }
+  .title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    color: var(--text);
+  }
+  .subtitle {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+  .subtitle.mutate-sub { color: var(--violet); letter-spacing: 0.4em; }
+
+  /* Card Area */
+  .card-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 20px;
+    cursor: pointer;
+    min-height: 280px;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 480px;
+    min-height: 240px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 20px;
+  }
+
+  /* Face-down card */
+  .card-back {
+    border: 2px solid var(--border);
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 18px,
+      var(--text-ghost) 18px,
+      var(--text-ghost) 19px
+    );
+    position: relative;
+  }
+  .card-back::after {
+    content: '◆';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 28px;
+    color: var(--text-dim);
+  }
+
+  /* Face-up card */
+  .card-face {
+    border: 2px solid var(--text);
+  }
+  .card-text {
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--text-brt);
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    padding: 0 8px;
+  }
+  .card-text.visible { opacity: 1; }
+  .card-divider {
+    color: var(--border);
+    font-size: 11px;
+    margin: 12px 0 6px;
+    opacity: 0;
+    transition: opacity 0.4s ease 0.1s;
+  }
+  .card-divider.visible { opacity: 1; }
+  .card-tradition {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    opacity: 0;
+    transition: opacity 0.4s ease 0.15s;
+  }
+  .card-tradition.visible { opacity: 1; }
+
+  /* Mutate Mode */
+  .mutate-area {
+    flex: 1;
+    padding: 8px 20px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 280px;
+  }
+  .mutate-prompt {
+    text-align: center;
+    color: var(--text-ghost);
+    font-size: 14px;
+  }
+  .mutate-card {
+    margin-bottom: 8px;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .mutate-card.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .mutate-label {
+    font-size: 14px;
+    color: var(--red);
+    margin-bottom: 4px;
+  }
+  .mutate-text {
+    font-size: 14px;
+    color: var(--text);
+    padding-left: 20px;
+    line-height: 1.5;
+  }
+  .mutate-trad {
+    font-size: 10px;
+    color: var(--text-ghost);
+    text-transform: uppercase;
+    padding-left: 20px;
+    margin-top: 2px;
+  }
+  .mutate-sym {
+    font-size: 14px;
+    color: var(--text-dim);
+    padding: 4px 0 4px 20px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .mutate-sym.visible { opacity: 1; }
+  .mutate-bar {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin: 8px 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+  .mutate-bar.visible { opacity: 1; }
+  .mutate-how-label {
+    font-size: 14px;
+    color: var(--violet);
+    margin-bottom: 4px;
+  }
+  .mutate-how-text {
+    font-size: 14px;
+    color: var(--violet);
+    padding-left: 10px;
+    line-height: 1.5;
+  }
+  .mutate-how-trad {
+    font-size: 10px;
+    color: var(--text-ghost);
+    text-transform: uppercase;
+    padding-left: 10px;
+    margin-top: 2px;
+  }
+  .mutate-directive {
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .mutate-directive.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Hints */
+  .hints {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    padding: 12px 0 16px;
+  }
+
+  /* Animations */
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Mobile tweaks */
+  @media (max-width: 480px) {
+    .title { font-size: 15px; }
+    .card-text { font-size: 14px; }
+    .card { min-height: 200px; padding: 20px 12px; }
+    .mutate-text, .mutate-how-text { font-size: 13px; }
+    .tabs { font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="frame">
+  <div class="frame-top" id="frameTop"></div>
+
+  <div class="tabs">
+    <span class="tab active" id="tabDraw" onclick="setMode('draw')">[▓ DRAW ▓]</span>
+    <span class="tab" id="tabMutate" onclick="setMode('mutate')">[ MUTATE ]</span>
+  </div>
+  <div class="separator" id="sepLine"></div>
+
+  <div class="title-area">
+    <div class="title">░▒▓█ C R E A T R I X █▓▒░</div>
+    <div class="subtitle" id="subtitle">a chaos oracle by pop chaos</div>
+  </div>
+
+  <!-- DRAW MODE -->
+  <div class="card-area" id="drawArea" onclick="handleAction()">
+    <div class="card card-back" id="card">
+      <div class="card-text" id="cardText"></div>
+      <div class="card-divider" id="cardDivider">──────────────────</div>
+      <div class="card-tradition" id="cardTradition"></div>
+    </div>
+  </div>
+
+  <!-- MUTATE MODE (hidden by default) -->
+  <div class="mutate-area" id="mutateArea" style="display:none" onclick="handleAction()">
+    <div class="mutate-prompt" id="mutatePrompt">tap to mutate</div>
+    <div id="mutateContent" style="display:none">
+      <div class="mutate-card" id="mcA">
+        <div class="mutate-label">A ═══</div>
+        <div class="mutate-text" id="mcAtext"></div>
+        <div class="mutate-trad" id="mcAtrad"></div>
+      </div>
+      <div class="mutate-sym" id="mcSym">×</div>
+      <div class="mutate-card" id="mcB">
+        <div class="mutate-label">B ═══</div>
+        <div class="mutate-text" id="mcBtext"></div>
+        <div class="mutate-trad" id="mcBtrad"></div>
+      </div>
+      <div class="mutate-bar" id="mcBar"></div>
+      <div class="mutate-directive" id="mcDir">
+        <div class="mutate-how-label">HOW:</div>
+        <div class="mutate-how-text" id="mcDtext"></div>
+        <div class="mutate-how-trad" id="mcDtrad"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hints" id="hints">[ TAP ] draw  |  [ M ] mode  |  <span id="deckCount">430</span></div>
+  <div class="frame-bot" id="frameBot"></div>
+</div>
+
+<script>
+// ── CARD DATA ──────────────────────────────────────────────────────────
+const ORIGINALS = ["(Organic) machinery", "A line has two sides", "A very small object -- its center", "Abandon desire", "Abandon normal instruments", "Accept advice", "Accretion", "Adding on", "Allow an easement (an easement is the abandonment of a stricture)", "Always first steps", "Always give yourself credit for having more than personality", "Are there sections? Consider transitions", "Ask people to work against their better judgement", "Ask your body", "Assemble some of the elements in a group and treat the group", "Back up a few steps. What else could you have done?", "Balance the consistency principle with the inconsistency principle", "Be dirty", "Be extravagant", "Be less critical more often", "Breathe more deeply", "Bridges -- build -- burn", "Call your mother and ask her what to do", "Cascades", "Change ambiguities to specifics", "Change instrument roles", "Change nothing and continue with immaculate consistency", "Change specifics to ambiguities", "Children's voices -- speaking -- singing", "Cluster analysis", "Consider different fading systems", "Consider transitions", "Consult other sources -- promising -- unpromising", "Convert a melodic element into a rhythmic element", "Courage!", "Cut a vital connection", "Decorate, decorate", "Define an area as 'safe' and use it as an anchor", "Describe the landscape in which this belongs", "Destroy nothing; destroy the most important thing", "Discard an axiom", "Disciplined self-indulgence", "Disconnect from desire", "Discover the recipes you are using and abandon them", "Discover your formulas and abandon them", "Display your talent", "Distorting time", "Do nothing for as long as possible", "Do something boring", "Do something sudden, destructive and unpredictable", "Do the last thing first", "Do the washing up", "Do the words need changing?", "Do we need holes?", "Don't avoid what is easy", "Don't be afraid of things because they're easy to do", "Don't be frightened of cliches", "Don't be frightened to display your talents", "Don't break the silence", "Don't stress one thing more than another", "Emphasize differences", "Emphasize repetitions", "Emphasize the flaws", "Faced with a choice, do both", "Feed the recording back out of the medium", "Feedback recordings into an acoustic situation", "Fill every beat with something", "Find a safe part and use it as an anchor", "First work alone, then work in unusual pairs", "From nothing to more than nothing", "Get your neck massaged", "Ghost echoes", "Give the game away", "Give way to your worst impulse", "Go outside. Shut the door.", "Go slowly all the way round the outside", "Go to an extreme, move back to a more comfortable place", "Honor thy error as a hidden intention", "How would someone else do it?", "How would you explain this to your parents?", "How would you have done it?", "Humanize something free of error", "Idiot glee", "Imagine the music as a moving chain or caterpillar", "Imagine the music as a series of disconnected events", "In total darkness, or in a very large room, very quietly", "Infinitesimal gradations", "Instead of changing the thing, change the world around it", "Intentions -- credibility of -- nobility of -- humility of", "Into the impossible", "Is it finished?", "Is something missing?", "Is the intonation correct?", "Is the style right?", "Is the tuning appropriate?", "Is there something missing?", "It is quite possible (after all)", "It is simply a matter of work", "Just carry on", "Left channel, right channel, center channel", "List the qualities it has. List those you'd like.", "Listen in total darkness, or in a very large room, very quietly", "Listen to the quiet voice", "Look at a very small object, look at its center", "Look at the order in which you do things", "Look closely at the most embarrassing details and amplify them", "Lost in useless territory", "Lowest common denominator check -- single beat -- single note -- single riff", "Magnify the most difficult details", "Make a blank valuable by putting it in an exquisite frame", "Make a sudden, destructive unpredictable action; incorporate", "Make an exhaustive list of everything you might do and do the last thing on the list", "Make it more sensual", "Make what's perfect more human", "Mechanize something idiosyncratic", "Move towards the unimportant", "Mute and continue", "Not building a wall but making a brick", "Once the search has begun, something will be found", "Only a part, not the whole", "Only one element of each kind", "Overtly resist change", "Pae White's non-blank graphic metacard", "Pay attention to distractions", "Put in earplugs", "Question the heroic approach", "Remember those quiet evenings", "Remove a restriction", "Remove ambiguities and convert to specifics", "Remove specifics and convert to ambiguities", "Remove the middle, extend the edges", "Repetition is a form of change", "Retrace your steps", "Revaluation (a warm feeling)", "Reverse", "Short circuit (example: a man eating peas with the idea that they will improve his virility shovels them straight into his lap)", "Shut the door and listen from outside", "Simple subtraction", "Simply a matter of work", "Slow preparation, fast execution", "Spectrum analysis", "State the problem in words as clearly as possible", "Steal a solution", "Take a break", "Take away as much mystery as possible. What is left?", "Take away the elements in order of apparent non-importance", "Take away the important parts", "Tape your mouth", "The inconsistency principle", "The most important thing is the thing most easily forgotten", "The tape is now the music", "Think -- inside the work -- outside the work", "Think of the radio", "Tidy up", "Towards the insignificant", "Trust in the you of now", "Try faking it", "Turn it upside down", "Twist the spine", "Use 'unqualified' people", "Use an old idea", "Use an unacceptable color", "Use cliches", "Use fewer notes", "Use filters", "Use something nearby as a model", "Use your own ideas", "Voice your suspicions", "Water", "What are the sections sections of? Imagine a caterpillar moving", "What are you really thinking about just now? Incorporate", "What context would look right?", "What do you do? Now, what do you do best?", "What else is this like?", "What is the reality of the situation?", "What is the simplest solution?", "What mistakes did you make last time?", "What most recently impressed you? How is it similar? What can you learn from it?", "What to increase? What to reduce? What to maintain?", "What were the branch points in the evolution of this entity?", "What were you really thinking about just now?", "What would make this really successful?", "What would your closest friend do?", "What wouldn't you do?", "When is it for? Who is it for?", "Where is the edge?", "Which parts can be grouped?", "Who would make this really successful?", "Work at a different speed", "Would anyone want it?", "You are an engineer", "You can only make one dot at a time", "You don't have to be ashamed of using your own ideas", "Your mistake was a hidden intention", "[blank white card]"];
+
+const MUTANTS = [{"card": "Steal from the spectacle and return it broken", "tradition": "SITUATIONIST INTERNATIONAL"}, {"card": "Drift through the structure without a map", "tradition": "SITUATIONIST INTERNATIONAL"}, {"card": "What would this sound like as graffiti on a billboard?", "tradition": "SITUATIONIST INTERNATIONAL"}, {"card": "Give it away. What changes?", "tradition": "SITUATIONIST INTERNATIONAL"}, {"card": "Make this a conversation, not a broadcast", "tradition": "SITUATIONIST INTERNATIONAL"}, {"card": "Refuse the assigned route", "tradition": "SITUATIONIST INTERNATIONAL"}, {"card": "Construct a situation, not an object", "tradition": "SITUATIONIST INTERNATIONAL"}, {"card": "Where do you get lost in this? Go there", "tradition": "SITUATIONIST INTERNATIONAL"}, {"card": "Treat the recording as a city you've never walked through", "tradition": "SITUATIONIST INTERNATIONAL"}, {"card": "Sabotage your own efficiency", "tradition": "SITUATIONIST INTERNATIONAL"}, {"card": "Wander without destination", "tradition": "SITUATIONIST INTERNATIONAL"}, {"card": "Make the invisible architecture audible", "tradition": "SITUATIONIST INTERNATIONAL"}, {"card": "Connect everything that was separated", "tradition": "SITUATIONIST INTERNATIONAL"}, {"card": "What is this work advertising? Remove that", "tradition": "SITUATIONIST INTERNATIONAL"}, {"card": "Write instructions for performing this", "tradition": "FLUXUS"}, {"card": "The instruction is the work", "tradition": "FLUXUS"}, {"card": "Make something so simple it becomes profound", "tradition": "FLUXUS"}, {"card": "What lives between these two forms?", "tradition": "FLUXUS"}, {"card": "This is not a rehearsal. This is the performance", "tradition": "FLUXUS"}, {"card": "Mail this to a stranger", "tradition": "FLUXUS"}, {"card": "Box everything and call it finished", "tradition": "FLUXUS"}, {"card": "Perform this piece by reading its title aloud", "tradition": "FLUXUS"}, {"card": "The score should fit on a postcard", "tradition": "FLUXUS"}, {"card": "Ordinary materials, extraordinary attention", "tradition": "FLUXUS"}, {"card": "A concert of one sound", "tradition": "FLUXUS"}, {"card": "What happens when the medium dissolves?", "tradition": "FLUXUS"}, {"card": "Exit music -- play only the parts where people leave", "tradition": "FLUXUS"}, {"card": "Humor is a valid structural element", "tradition": "FLUXUS"}, {"card": "The idea is the machine that makes the art", "tradition": "CONCEPTUAL ART"}, {"card": "Remove the object. What remains?", "tradition": "CONCEPTUAL ART"}, {"card": "Write instructions someone else could follow blindly", "tradition": "CONCEPTUAL ART"}, {"card": "The plan is the work. Follow it without judgment", "tradition": "CONCEPTUAL ART"}, {"card": "Your statement of intent is the final form", "tradition": "CONCEPTUAL ART"}, {"card": "What if the documentation IS the piece?", "tradition": "CONCEPTUAL ART"}, {"card": "Apply the same operation to every element", "tradition": "CONCEPTUAL ART"}, {"card": "Remove authorship. What's left?", "tradition": "CONCEPTUAL ART"}, {"card": "Language is sufficient material", "tradition": "CONCEPTUAL ART"}, {"card": "One sentence can be a complete work", "tradition": "CONCEPTUAL ART"}, {"card": "Enumerate every decision. Now make the opposite ones", "tradition": "CONCEPTUAL ART"}, {"card": "All possible combinations of three elements", "tradition": "CONCEPTUAL ART"}, {"card": "Replace every aesthetic choice with a system", "tradition": "CONCEPTUAL ART"}, {"card": "How long can you sustain this single gesture?", "tradition": "PERFORMANCE ART"}, {"card": "What remains when the body is the only instrument?", "tradition": "PERFORMANCE ART"}, {"card": "Endure it into existence", "tradition": "PERFORMANCE ART"}, {"card": "The audience completes the work", "tradition": "PERFORMANCE ART"}, {"card": "Presence over production", "tradition": "PERFORMANCE ART"}, {"card": "Real time is the only honest time", "tradition": "PERFORMANCE ART"}, {"card": "What would this be as a 6-hour performance?", "tradition": "PERFORMANCE ART"}, {"card": "The vulnerability is the point", "tradition": "PERFORMANCE ART"}, {"card": "Repeat until transformation", "tradition": "PERFORMANCE ART"}, {"card": "Risk something", "tradition": "PERFORMANCE ART"}, {"card": "Your body already knows the rhythm -- stop thinking", "tradition": "PERFORMANCE ART"}, {"card": "Do it live, accept the failures", "tradition": "PERFORMANCE ART"}, {"card": "Ritualize it", "tradition": "PERFORMANCE ART"}, {"card": "Let exhaustion make the decisions", "tradition": "PERFORMANCE ART"}, {"card": "Name the frame", "tradition": "INSTITUTIONAL CRITIQUE"}, {"card": "What institution does this work serve?", "tradition": "INSTITUTIONAL CRITIQUE"}, {"card": "The speaker cone is not neutral", "tradition": "INSTITUTIONAL CRITIQUE"}, {"card": "Who paid for this? How does that change it?", "tradition": "INSTITUTIONAL CRITIQUE"}, {"card": "Make the support structure visible", "tradition": "INSTITUTIONAL CRITIQUE"}, {"card": "The context IS the content", "tradition": "INSTITUTIONAL CRITIQUE"}, {"card": "Critique the tool you're using, with the tool you're using", "tradition": "INSTITUTIONAL CRITIQUE"}, {"card": "The silence between tracks is a fiction", "tradition": "INSTITUTIONAL CRITIQUE"}, {"card": "Question who gets to call this music", "tradition": "INSTITUTIONAL CRITIQUE"}, {"card": "Where does the power live in this arrangement?", "tradition": "INSTITUTIONAL CRITIQUE"}, {"card": "Show how it was made", "tradition": "INSTITUTIONAL CRITIQUE"}, {"card": "Name the ideology of your tools", "tradition": "INSTITUTIONAL CRITIQUE"}, {"card": "Design a micro-utopia that lasts exactly as long as the track", "tradition": "RELATIONAL AESTHETICS"}, {"card": "It only exists between people", "tradition": "RELATIONAL AESTHETICS"}, {"card": "Make the listener feel welcome", "tradition": "RELATIONAL AESTHETICS"}, {"card": "The listener is a collaborator, not a consumer", "tradition": "RELATIONAL AESTHETICS"}, {"card": "Cook a meal with these sounds", "tradition": "RELATIONAL AESTHETICS"}, {"card": "Make something people want to gather around", "tradition": "RELATIONAL AESTHETICS"}, {"card": "The contract between maker and listener -- rewrite it", "tradition": "RELATIONAL AESTHETICS"}, {"card": "Build a whole world in four bars", "tradition": "RELATIONAL AESTHETICS"}, {"card": "Exchange, not broadcast", "tradition": "RELATIONAL AESTHETICS"}, {"card": "Who are you inviting in? Who are you excluding?", "tradition": "RELATIONAL AESTHETICS"}, {"card": "The network is the gallery. Circulate it", "tradition": "POST-INTERNET"}, {"card": "Embrace low resolution", "tradition": "POST-INTERNET"}, {"card": "Default settings are a creative choice", "tradition": "POST-INTERNET"}, {"card": "Screenshot this and call it finished", "tradition": "POST-INTERNET"}, {"card": "How does this degrade when compressed?", "tradition": "POST-INTERNET"}, {"card": "One post among millions. Act accordingly", "tradition": "POST-INTERNET"}, {"card": "What does this look like at 2x speed scrolling past?", "tradition": "POST-INTERNET"}, {"card": "The file has a body. Where does it hurt?", "tradition": "POST-INTERNET"}, {"card": "Surface is depth", "tradition": "POST-INTERNET"}, {"card": "Use the attention span as the form", "tradition": "POST-INTERNET"}, {"card": "Make it for a phone speaker, not studio monitors", "tradition": "POST-INTERNET"}, {"card": "The copy is the original", "tradition": "POST-INTERNET"}, {"card": "What does the container want?", "tradition": "POST-INTERNET"}, {"card": "Circulation over completion", "tradition": "POST-INTERNET"}, {"card": "Render at the lowest possible quality. Is it still yours?", "tradition": "POST-INTERNET"}, {"card": "Opacity is a right -- not everything needs to be understood", "tradition": "DECOLONIAL THEORY"}, {"card": "Create from the edge, not the center", "tradition": "DECOLONIAL THEORY"}, {"card": "Whose knowledge system built this tool?", "tradition": "DECOLONIAL THEORY"}, {"card": "Leave something untranslated", "tradition": "DECOLONIAL THEORY"}, {"card": "Break the rules you were taught", "tradition": "DECOLONIAL THEORY"}, {"card": "What tradition are you unconsciously continuing?", "tradition": "DECOLONIAL THEORY"}, {"card": "The wound speaks its own language", "tradition": "DECOLONIAL THEORY"}, {"card": "Let two systems contaminate each other", "tradition": "DECOLONIAL THEORY"}, {"card": "Make something that escapes capture", "tradition": "DECOLONIAL THEORY"}, {"card": "What if you owed nothing to the canon?", "tradition": "DECOLONIAL THEORY"}, {"card": "Center what you were taught to put in the margins", "tradition": "DECOLONIAL THEORY"}, {"card": "Whose story is missing?", "tradition": "DECOLONIAL THEORY"}, {"card": "Make the domestic monumental", "tradition": "FEMINIST ART"}, {"card": "Treat care as a creative act", "tradition": "FEMINIST ART"}, {"card": "Do the work that sustains the work", "tradition": "FEMINIST ART"}, {"card": "What invisible labor went into this?", "tradition": "FEMINIST ART"}, {"card": "Embody the contradiction", "tradition": "FEMINIST ART"}, {"card": "Pleasure beyond utility", "tradition": "FEMINIST ART"}, {"card": "What would this sound like from inside the body?", "tradition": "FEMINIST ART"}, {"card": "Become porous", "tradition": "FEMINIST ART"}, {"card": "Refuse mastery", "tradition": "FEMINIST ART"}, {"card": "Who cleans up after the performance?", "tradition": "FEMINIST ART"}, {"card": "Tend to what's already growing", "tradition": "FEMINIST ART"}, {"card": "Make a thousand people feel alone with you", "tradition": "FEMINIST ART"}, {"card": "Hear everything. Judge nothing", "tradition": "SOUND STUDIES / DEEP LISTENING"}, {"card": "The environment is already composing", "tradition": "SOUND STUDIES / DEEP LISTENING"}, {"card": "What is the sound of this room?", "tradition": "SOUND STUDIES / DEEP LISTENING"}, {"card": "The silence is full of sound", "tradition": "SOUND STUDIES / DEEP LISTENING"}, {"card": "Leave the studio. Bring your ears", "tradition": "SOUND STUDIES / DEEP LISTENING"}, {"card": "The ear is always open -- you cannot close it", "tradition": "SOUND STUDIES / DEEP LISTENING"}, {"card": "What's below hearing that you can still feel?", "tradition": "SOUND STUDIES / DEEP LISTENING"}, {"card": "Remove the source. What remains?", "tradition": "SOUND STUDIES / DEEP LISTENING"}, {"card": "Make a sound map of where you are right now", "tradition": "SOUND STUDIES / DEEP LISTENING"}, {"card": "Duration of decay", "tradition": "SOUND STUDIES / DEEP LISTENING"}, {"card": "The error is the message", "tradition": "GLITCH THEORY"}, {"card": "Honor the artifact", "tradition": "GLITCH THEORY"}, {"card": "The glitch reveals what the system hides", "tradition": "GLITCH THEORY"}, {"card": "Break it on purpose, then listen to what it says", "tradition": "GLITCH THEORY"}, {"card": "Noise is information the system wasn't designed for", "tradition": "GLITCH THEORY"}, {"card": "Compression as composition", "tradition": "GLITCH THEORY"}, {"card": "The machine's desire -- let it fail the way it wants to", "tradition": "GLITCH THEORY"}, {"card": "Data decay as patina", "tradition": "GLITCH THEORY"}, {"card": "Run it through the wrong codec", "tradition": "GLITCH THEORY"}, {"card": "The bug is a feature -- the feature is ideology", "tradition": "GLITCH THEORY"}, {"card": "Dirty new media", "tradition": "GLITCH THEORY"}, {"card": "Corrupt the header, keep the body", "tradition": "GLITCH THEORY"}, {"card": "What the tool wasn't designed to do is what it does best", "tradition": "GLITCH THEORY"}, {"card": "Glitch is a verb. Glitch yourself", "tradition": "GLITCH THEORY"}, {"card": "What does the material want to become?", "tradition": "NEW MATERIALISM"}, {"card": "Even dead things hum", "tradition": "NEW MATERIALISM"}, {"card": "You and the instrument are making each other", "tradition": "NEW MATERIALISM"}, {"card": "Let the algorithm decide one thing", "tradition": "NEW MATERIALISM"}, {"card": "What is this from the tool's perspective?", "tradition": "NEW MATERIALISM"}, {"card": "No element is more important than any other", "tradition": "NEW MATERIALISM"}, {"card": "What creature moves like this rhythm?", "tradition": "NEW MATERIALISM"}, {"card": "This is not a song. It's an ecology", "tradition": "NEW MATERIALISM"}, {"card": "The material remembers", "tradition": "NEW MATERIALISM"}, {"card": "Making-with, not making-alone", "tradition": "NEW MATERIALISM"}, {"card": "Let the grain speak", "tradition": "NEW MATERIALISM"}, {"card": "Who is actually composing?", "tradition": "NEW MATERIALISM"}, {"card": "The ghost of the future that never arrived", "tradition": "HAUNTOLOGY"}, {"card": "What music did the year 2000 promise?", "tradition": "HAUNTOLOGY"}, {"card": "The medium's memory is showing through", "tradition": "HAUNTOLOGY"}, {"card": "Lost futures are still futures", "tradition": "HAUNTOLOGY"}, {"card": "Nostalgia for something that never existed", "tradition": "HAUNTOLOGY"}, {"card": "Mourn the canceled future. Build a new one", "tradition": "HAUNTOLOGY"}, {"card": "What does this piece remember?", "tradition": "HAUNTOLOGY"}, {"card": "Let two eras coexist", "tradition": "HAUNTOLOGY"}, {"card": "The sample carries its past", "tradition": "HAUNTOLOGY"}, {"card": "Something is here that shouldn't be", "tradition": "HAUNTOLOGY"}, {"card": "Something is missing that should be here", "tradition": "HAUNTOLOGY"}, {"card": "Record over an old tape -- what bleeds through?", "tradition": "HAUNTOLOGY"}, {"card": "Ruins are more honest than new buildings", "tradition": "HAUNTOLOGY"}, {"card": "The mothership is a studio", "tradition": "AFRO-FUTURISM"}, {"card": "Meet in the break", "tradition": "AFRO-FUTURISM"}, {"card": "You were never meant to fit. Use that", "tradition": "AFRO-FUTURISM"}, {"card": "Everything you touch, you change", "tradition": "AFRO-FUTURISM"}, {"card": "Invent a cosmology for this track", "tradition": "AFRO-FUTURISM"}, {"card": "The drum is the first computer", "tradition": "AFRO-FUTURISM"}, {"card": "The space between beats is where freedom lives", "tradition": "AFRO-FUTURISM"}, {"card": "Color the void", "tradition": "AFRO-FUTURISM"}, {"card": "Code-switch the genre", "tradition": "AFRO-FUTURISM"}, {"card": "Make music for a world that doesn't exist yet", "tradition": "AFRO-FUTURISM"}, {"card": "Improvisation is survival technology", "tradition": "AFRO-FUTURISM"}, {"card": "Cut it up. Reassemble by chance", "tradition": "DADA / SURREALISM"}, {"card": "Make each section blind to the others", "tradition": "DADA / SURREALISM"}, {"card": "Write without editing for five minutes", "tradition": "DADA / SURREALISM"}, {"card": "Dream logic, not narrative logic", "tradition": "DADA / SURREALISM"}, {"card": "The accident is smarter than you", "tradition": "DADA / SURREALISM"}, {"card": "One note. How many ways can it change?", "tradition": "MINIMALISM"}, {"card": "Phase it against itself", "tradition": "MINIMALISM"}, {"card": "Subtract until it hurts, then subtract one more", "tradition": "MINIMALISM"}, {"card": "The grid is a field, not a prison", "tradition": "MINIMALISM"}, {"card": "Solo each element. Which can you lose?", "tradition": "MINIMALISM"}, {"card": "Weaponize the frequency", "tradition": "NOISE / INDUSTRIAL"}, {"card": "Make it physically uncomfortable", "tradition": "NOISE / INDUSTRIAL"}, {"card": "The body flinches. Good. Keep going", "tradition": "NOISE / INDUSTRIAL"}, {"card": "Three elements. No more. Ship it", "tradition": "PUNK / DIY"}, {"card": "Polish is a form of cowardice", "tradition": "PUNK / DIY"}, {"card": "The demo IS the album", "tradition": "PUNK / DIY"}, {"card": "If you can't play it, play it anyway", "tradition": "PUNK / DIY"}, {"card": "Write a rule. Follow it until it breaks", "tradition": "SYSTEMS / GENERATIVE"}, {"card": "Let the algorithm finish the sentence", "tradition": "SYSTEMS / GENERATIVE"}, {"card": "Automate the part you love most", "tradition": "SYSTEMS / GENERATIVE"}, {"card": "Let it rot. What survives?", "tradition": "LAND ART / ENTROPY"}, {"card": "Bury it and dig it up in a week", "tradition": "LAND ART / ENTROPY"}, {"card": "Erosion is a collaborator", "tradition": "LAND ART / ENTROPY"}, {"card": "What typeface is this sound?", "tradition": "DESIGN / TYPOGRAPHY"}, {"card": "Negative space is doing the work", "tradition": "DESIGN / TYPOGRAPHY"}, {"card": "The grid you can't see is the one controlling you", "tradition": "DESIGN / TYPOGRAPHY"}, {"card": "Zoom in until the pixels are the landscape", "tradition": "DESIGN / TYPOGRAPHY"}, {"card": "The surface is lying. What's underneath?", "tradition": "DESIGN / TYPOGRAPHY"}, {"card": "Translate this into a smell. Now translate the smell back", "tradition": "CROSS-MODAL"}, {"card": "What temperature is this? Change it", "tradition": "CROSS-MODAL"}, {"card": "Set a trap for your future self", "tradition": "CROSS-MODAL"}, {"card": "Perform this for an audience of insects", "tradition": "CROSS-MODAL"}, {"card": "The power went out. Finish by candlelight", "tradition": "CROSS-MODAL"}, {"card": "Put this in a language you don't speak", "tradition": "CROSS-MODAL"}, {"card": "What would this weigh? Make it heavier", "tradition": "CROSS-MODAL"}, {"card": "This piece is evidence in a trial. What crime?", "tradition": "CROSS-MODAL"}, {"card": "Make the version that gets you fired", "tradition": "CROSS-MODAL"}, {"card": "Invert every decision. Keep only what improved", "tradition": "CROSS-MODAL"}, {"card": "What is this piece's last meal before execution?", "tradition": "CROSS-MODAL"}, {"card": "Your collaborator is gravity", "tradition": "CROSS-MODAL"}, {"card": "Make this in actual darkness", "tradition": "CROSS-MODAL"}, {"card": "This is the soundtrack to someone's worst day", "tradition": "CROSS-MODAL"}, {"card": "Teach this to a child. What do they change?", "tradition": "CROSS-MODAL"}, {"card": "Find the midpoint between this and its opposite", "tradition": "CROSS-MODAL"}, {"card": "Use only materials that decompose within a month", "tradition": "CROSS-MODAL"}, {"card": "Interview the silence. What is it refusing to say?", "tradition": "CROSS-MODAL"}, {"card": "This piece is a rumor about you. Is it true?", "tradition": "CROSS-MODAL"}, {"card": "Play it at half speed. What genre did it become?", "tradition": "CROSS-MODAL"}, {"card": "Convert the medium. What changed?", "tradition": "CROSS-MODAL"}, {"card": "Make the version you're ashamed of", "tradition": "DANGER"}, {"card": "What are you avoiding? Go directly there", "tradition": "DANGER"}, {"card": "Who will this hurt? Make it anyway", "tradition": "DANGER"}, {"card": "Admit what this is really about", "tradition": "DANGER"}, {"card": "Show the part you'd normally edit out", "tradition": "DANGER"}, {"card": "Make it worse on purpose. Notice what you're protecting", "tradition": "DANGER"}, {"card": "Your taste is a prison. Betray it", "tradition": "DANGER"}, {"card": "Dedicate this to the person you've wronged most", "tradition": "DANGER"}, {"card": "What would you make if no one would ever know?", "tradition": "DANGER"}, {"card": "Identify the lie in this piece. Keep it", "tradition": "DANGER"}];
+
+const DIRECTIVES = [["The first devours the second", "Mutation"], ["They are in love. What is their child?", "Mutation"], ["One is the disease. The other is the cure", "Mutation"], ["Translate A into the language of B", "Mutation"], ["B is the shadow A refuses to acknowledge", "Mutation"], ["What would A sound like if B were true?", "Mutation"], ["Collide them at maximum velocity", "Mutation"], ["One must die so the other can live", "Mutation"], ["A is the question. B is the wrong answer", "Mutation"], ["Layer them until you can't tell which is which", "Mutation"], ["A is the container. B is the substance", "Mutation"], ["Perform A while dreaming of B", "Mutation"], ["B corrupts A's source code", "Mutation"], ["They meet in the middle and cancel each other out", "Mutation"], ["A is the map. B is the territory. They disagree", "Mutation"], ["Make them fight. Use the debris", "Mutation"], ["One is the rhythm. The other is the silence between", "Mutation"], ["A speaks. B translates. Both lie", "Mutation"], ["What does A look like after B has passed through it?", "Mutation"], ["They are the same thing seen from opposite sides", "Mutation"], ["Use B's method to solve A's problem", "Mutation"], ["A at dawn. B at midnight. What happens at noon?", "Mutation"], ["One is the original. The other is the forgery. Which?", "Mutation"], ["B is A's childhood memory", "Mutation"], ["Stack them. Now remove the load-bearing one", "Mutation"], ["A teaches a masterclass. B heckles from the back", "Mutation"], ["They orbit each other. What's at the center?", "Mutation"], ["Feed A to B. Describe what comes out", "Mutation"], ["One is the mask. The other is the face beneath", "Mutation"], ["The space between them is the real work", "Mutation"]];
+
+// ── STATE ──────────────────────────────────────────────────────────────
+let mode = 'draw'; // 'draw' | 'mutate'
+let drawState = 'idle'; // 'idle' | 'revealed'
+const allCards = [
+  ...ORIGINALS.map(c => ({ card: c, tradition: 'Eno/Schmidt' })),
+  ...MUTANTS
+];
+const deckSize = allCards.length;
+
+document.getElementById('deckCount').textContent = deckSize;
+
+// Build frame lines
+function buildFrame() {
+  const w = document.querySelector('.frame').offsetWidth;
+  const chars = Math.floor(w / 8);
+  document.getElementById('frameTop').textContent = '╔' + '═'.repeat(chars - 2) + '╗';
+  document.getElementById('frameBot').textContent = '╚' + '═'.repeat(chars - 2) + '╝';
+  document.getElementById('sepLine').textContent = '╠' + '═'.repeat(chars - 2) + '╣';
+  const barChars = Math.floor((w - 40) / 8);
+  document.getElementById('mcBar').textContent = '▓'.repeat(barChars);
+}
+buildFrame();
+window.addEventListener('resize', buildFrame);
+
+// ── MODE SWITCHING ─────────────────────────────────────────────────────
+function setMode(m) {
+  if (mode === m) return;
+  mode = m;
+  drawState = 'idle';
+
+  const tabDraw = document.getElementById('tabDraw');
+  const tabMutate = document.getElementById('tabMutate');
+  const drawArea = document.getElementById('drawArea');
+  const mutateArea = document.getElementById('mutateArea');
+  const subtitle = document.getElementById('subtitle');
+  const hints = document.getElementById('hints');
+
+  if (mode === 'draw') {
+    tabDraw.textContent = '[▓ DRAW ▓]';
+    tabDraw.classList.add('active');
+    tabMutate.textContent = '[ MUTATE ]';
+    tabMutate.classList.remove('active');
+    drawArea.style.display = '';
+    mutateArea.style.display = 'none';
+    subtitle.textContent = 'a chaos oracle by pop chaos';
+    subtitle.className = 'subtitle';
+    resetDrawCard();
+  } else {
+    tabDraw.textContent = '[ DRAW ]';
+    tabDraw.classList.remove('active');
+    tabMutate.textContent = '[▓ MUTATE ▓]';
+    tabMutate.classList.add('active');
+    drawArea.style.display = 'none';
+    mutateArea.style.display = '';
+    subtitle.textContent = 'M U T A T E';
+    subtitle.className = 'subtitle mutate-sub';
+    resetMutate();
+  }
+
+  const action = mode === 'draw' ? 'draw' : 'mutate';
+  const other = mode === 'draw' ? 'mutate' : 'draw';
+  document.getElementById('hints').innerHTML =
+    `[ TAP ] ${action}  |  [ M ] ${other}  |  <span id="deckCount">${deckSize}</span>`;
+}
+
+// ── DRAW MODE ──────────────────────────────────────────────────────────
+function resetDrawCard() {
+  const card = document.getElementById('card');
+  card.className = 'card card-back';
+  document.getElementById('cardText').classList.remove('visible');
+  document.getElementById('cardDivider').classList.remove('visible');
+  document.getElementById('cardTradition').classList.remove('visible');
+  drawState = 'idle';
+}
+
+function drawCard() {
+  const pick = allCards[Math.floor(Math.random() * allCards.length)];
+  const card = document.getElementById('card');
+  card.className = 'card card-face';
+
+  document.getElementById('cardText').textContent = pick.card;
+  document.getElementById('cardTradition').textContent = '[' + pick.tradition.toUpperCase() + ']';
+
+  requestAnimationFrame(() => {
+    document.getElementById('cardText').classList.add('visible');
+    document.getElementById('cardDivider').classList.add('visible');
+    document.getElementById('cardTradition').classList.add('visible');
+  });
+
+  drawState = 'revealed';
+}
+
+// ── MUTATE MODE ────────────────────────────────────────────────────────
+function resetMutate() {
+  document.getElementById('mutatePrompt').style.display = '';
+  document.getElementById('mutateContent').style.display = 'none';
+  // Reset visibility
+  ['mcA', 'mcB', 'mcDir'].forEach(id => document.getElementById(id).classList.remove('visible'));
+  document.getElementById('mcSym').classList.remove('visible');
+  document.getElementById('mcBar').classList.remove('visible');
+  drawState = 'idle';
+}
+
+function mutate() {
+  const pool = [...allCards, ...DIRECTIVES.map(d => ({ card: d[0], tradition: d[1] }))];
+  const picks = [];
+  while (picks.length < 3) {
+    const p = pool[Math.floor(Math.random() * pool.length)];
+    picks.push(p);
+  }
+
+  document.getElementById('mutatePrompt').style.display = 'none';
+  document.getElementById('mutateContent').style.display = '';
+
+  document.getElementById('mcAtext').textContent = '"' + picks[0].card + '"';
+  document.getElementById('mcAtrad').textContent = '[' + picks[0].tradition.toUpperCase() + ']';
+  document.getElementById('mcBtext').textContent = '"' + picks[1].card + '"';
+  document.getElementById('mcBtrad').textContent = '[' + picks[1].tradition.toUpperCase() + ']';
+  document.getElementById('mcDtext').textContent = picks[2].card;
+  document.getElementById('mcDtrad').textContent = '[' + picks[2].tradition.toUpperCase() + ']';
+
+  // Staggered reveal
+  setTimeout(() => document.getElementById('mcA').classList.add('visible'), 0);
+  setTimeout(() => document.getElementById('mcSym').classList.add('visible'), 120);
+  setTimeout(() => document.getElementById('mcB').classList.add('visible'), 240);
+  setTimeout(() => document.getElementById('mcBar').classList.add('visible'), 400);
+  setTimeout(() => document.getElementById('mcDir').classList.add('visible'), 560);
+
+  drawState = 'revealed';
+}
+
+// ── INPUT HANDLING ─────────────────────────────────────────────────────
+function handleAction() {
+  if (mode === 'draw') {
+    if (drawState === 'idle') {
+      drawCard();
+    } else {
+      resetDrawCard();
+    }
+  } else {
+    if (drawState === 'idle') {
+      mutate();
+    } else {
+      // Reset then re-mutate
+      resetMutate();
+      setTimeout(mutate, 100);
+    }
+  }
+}
+
+// Keyboard support
+document.addEventListener('keydown', (e) => {
+  if (e.key === ' ' || e.key === 'Enter') {
+    e.preventDefault();
+    handleAction();
+  } else if (e.key === 'm' || e.key === 'M') {
+    setMode(mode === 'draw' ? 'mutate' : 'draw');
+  }
+});
+</script>
+</body>
+</html>
