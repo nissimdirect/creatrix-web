@@ -189,13 +189,6 @@
   }
   .mutate-card {
     margin-bottom: 8px;
-    opacity: 0;
-    transform: translateY(6px);
-    transition: opacity 0.4s ease, transform 0.4s ease;
-  }
-  .mutate-card.visible {
-    opacity: 1;
-    transform: translateY(0);
   }
   .mutate-label {
     font-size: 14px;
@@ -219,19 +212,7 @@
     font-size: 14px;
     color: var(--text-dim);
     padding: 4px 0 4px 20px;
-    opacity: 0;
-    transition: opacity 0.3s ease;
   }
-  .mutate-sym.visible { opacity: 1; }
-  .mutate-bar {
-    font-size: 11px;
-    color: var(--text-dim);
-    margin: 8px 0;
-    overflow: hidden;
-    opacity: 0;
-    transition: opacity 0.4s ease;
-  }
-  .mutate-bar.visible { opacity: 1; }
   .mutate-how-label {
     font-size: 14px;
     color: var(--violet);
@@ -251,43 +232,53 @@
     margin-top: 2px;
   }
   .mutate-directive {
-    opacity: 0;
-    transform: translateY(6px);
-    transition: opacity 0.4s ease, transform 0.4s ease;
-  }
-  .mutate-directive.visible {
-    opacity: 1;
-    transform: translateY(0);
+    margin-top: 8px;
   }
   .mutate-result {
-    margin-top: 12px;
     opacity: 0;
     transform: translateY(6px);
     transition: opacity 0.5s ease, transform 0.5s ease;
+    cursor: pointer;
+    padding: 16px 0;
   }
   .mutate-result.visible {
     opacity: 1;
     transform: translateY(0);
-  }
-  .mutate-result-bar {
-    font-size: 11px;
-    color: var(--text-dim);
-    margin-bottom: 4px;
-    overflow: hidden;
   }
   .mutate-result-label {
     font-size: 11px;
     color: var(--text-dim);
     text-align: center;
     letter-spacing: 0.3em;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
   }
   .mutate-result-text {
-    font-size: 18px;
+    font-size: 20px;
     color: var(--text-brt);
     text-align: center;
     line-height: 1.6;
-    padding: 4px 8px;
+    padding: 4px 12px;
+  }
+  .mutate-eq-toggle {
+    text-align: center;
+    color: var(--text-ghost);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 8px 0;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    user-select: none;
+  }
+  .mutate-eq-toggle.visible {
+    opacity: 1;
+  }
+  .mutate-eq-toggle:hover {
+    color: var(--text-dim);
+  }
+  .mutate-equation {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--text-ghost);
   }
 
   /* Hints */
@@ -340,30 +331,31 @@
   </div>
 
   <!-- MUTATE MODE (hidden by default) -->
-  <div class="mutate-area" id="mutateArea" style="display:none" onclick="handleAction()">
-    <div class="mutate-prompt" id="mutatePrompt">tap to mutate</div>
+  <div class="mutate-area" id="mutateArea" style="display:none">
+    <div class="mutate-prompt" id="mutatePrompt" onclick="handleAction()">tap to mutate</div>
     <div id="mutateContent" style="display:none">
-      <div class="mutate-card" id="mcA">
-        <div class="mutate-label">A ═══</div>
-        <div class="mutate-text" id="mcAtext"></div>
-        <div class="mutate-trad" id="mcAtrad"></div>
-      </div>
-      <div class="mutate-sym" id="mcSym">×</div>
-      <div class="mutate-card" id="mcB">
-        <div class="mutate-label">B ═══</div>
-        <div class="mutate-text" id="mcBtext"></div>
-        <div class="mutate-trad" id="mcBtrad"></div>
-      </div>
-      <div class="mutate-bar" id="mcBar"></div>
-      <div class="mutate-directive" id="mcDir">
-        <div class="mutate-how-label">HOW:</div>
-        <div class="mutate-how-text" id="mcDtext"></div>
-        <div class="mutate-how-trad" id="mcDtrad"></div>
-      </div>
-      <div class="mutate-result" id="mcResult">
-        <div class="mutate-result-bar" id="mcResultBar"></div>
+      <div class="mutate-result" id="mcResult" onclick="handleAction()">
         <div class="mutate-result-label">=== MUTATION ===</div>
         <div class="mutate-result-text" id="mcRtext"></div>
+      </div>
+      <div class="mutate-eq-toggle" id="mcEqToggle" onclick="toggleEquation(event)">▸ show equation</div>
+      <div class="mutate-equation" id="mcEquation" style="display:none">
+        <div class="mutate-card" id="mcA">
+          <div class="mutate-label">A ═══</div>
+          <div class="mutate-text" id="mcAtext"></div>
+          <div class="mutate-trad" id="mcAtrad"></div>
+        </div>
+        <div class="mutate-sym">×</div>
+        <div class="mutate-card" id="mcB">
+          <div class="mutate-label">B ═══</div>
+          <div class="mutate-text" id="mcBtext"></div>
+          <div class="mutate-trad" id="mcBtrad"></div>
+        </div>
+        <div class="mutate-directive" id="mcDir">
+          <div class="mutate-how-label">HOW:</div>
+          <div class="mutate-how-text" id="mcDtext"></div>
+          <div class="mutate-how-trad" id="mcDtrad"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -810,6 +802,69 @@ function recordMutation(text) {
   if (_recentMutations.length > 20) _recentMutations.shift();
 }
 
+// Variant engine (post-processing)
+function variantGate(text) {
+  if (!text) return false;
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length < 4 || words.length > 15) return false;
+  if (words.filter(w => w.replace(/[^a-z]/gi, '').length > 2).length < 3) return false;
+  const lower = text.toLowerCase();
+  for (const f of FILLER) { if (lower.includes(f)) return false; }
+  for (const existing of _existingLower) {
+    if (levenshtein(lower, existing) < 5) return false;
+  }
+  if (_recentMutations.includes(lower)) return false;
+  return true;
+}
+
+function pickVariant(text, tnA, tnB) {
+  const variants = [text]; // E: raw original
+
+  // A/B: Split at natural breaks
+  for (const sep of ['. ', ' -- ', ', ']) {
+    const idx = text.indexOf(sep);
+    if (idx > -1) {
+      const first = text.slice(0, idx).replace(/\.$/, '');
+      const second = text.slice(idx + sep.length);
+      if (first.split(/\s+/).length >= 4) variants.push(first);
+      if (second && second.split(/\s+/).length >= 4)
+        variants.push(second.charAt(0).toUpperCase() + second.slice(1));
+      break;
+    }
+  }
+
+  // D: Inverted — swap tradition nouns
+  if (tnA && tnB && tnA !== tnB) {
+    const lower = text.toLowerCase();
+    if (lower.includes(tnA) && lower.includes(tnB)) {
+      let inv = text.replace(new RegExp('\\b' + tnA + '\\b', 'gi'), '\x00');
+      inv = inv.replace(new RegExp('\\b' + tnB + '\\b', 'gi'), tnA);
+      inv = inv.replace(/\x00/g, tnB);
+      if (inv !== text) variants.push(inv);
+    }
+  }
+
+  // C: Compressed — drop articles before tradition nouns
+  let compressed = text;
+  for (const noun of [tnA, tnB]) {
+    if (noun) compressed = compressed.replace(
+      new RegExp('\\bthe\\s+(' + noun + ')\\b', 'gi'), '$1');
+  }
+  if (compressed !== text && compressed.split(/\s+/).length >= 4) variants.push(compressed);
+
+  // F: Negated wildcard
+  const words = text.split(/\s+/);
+  const firstClean = words[0].toLowerCase().replace(/[^a-z]/g, '');
+  if (IMP_VERBS.has(firstClean)) {
+    variants.push("Don't " + words[0].toLowerCase() + " " + words.slice(1).join(' '));
+  }
+
+  const valid = variants.filter(v => variantGate(v));
+  if (!valid.length) return text;
+  const chosen = valid[Math.floor(Math.random() * valid.length)];
+  return chosen.charAt(0).toUpperCase() + chosen.slice(1);
+}
+
 // Main mutation pipeline
 function generateMutation(cardA, cardB, directive) {
   const tradA = cardA.tradition || 'Eno/Schmidt';
@@ -833,7 +888,8 @@ function generateMutation(cardA, cardB, directive) {
   if (strategy === 'collide') seeds.sort(() => Math.random() - 0.5);
   const markovResult = markovGenerate(seeds, 10);
   if (markovResult && qualityGate(markovResult)) {
-    const result = capitalize(markovResult);
+    const raw = capitalize(markovResult);
+    const result = pickVariant(raw, '', '');
     recordMutation(result);
     return { text: result, layer: 'markov' };
   }
@@ -855,7 +911,8 @@ function generateMutation(cardA, cardB, directive) {
         : nounsB[Math.floor(Math.random() * nounsB.length)];
       const result = tmpl(pA, pB);
       if (result && qualityGate(result)) {
-        const final = capitalize(result);
+        const raw = capitalize(result);
+        const final = pickVariant(raw, pA._tn || '', pB._tn || '');
         recordMutation(final);
         _recentTemplateIds.push(id);
         if (_recentTemplateIds.length > 5) _recentTemplateIds.shift();
@@ -871,7 +928,8 @@ function generateMutation(cardA, cardB, directive) {
   for (const tmpl of semShuffled) {
     const result = tmpl(semA, semB);
     if (qualityGate(result)) {
-      const final = capitalize(result);
+      const raw = capitalize(result);
+      const final = pickVariant(raw, '', '');
       recordMutation(final);
       return { text: final, layer: 'semantic' };
     }
@@ -969,12 +1027,25 @@ function drawCard() {
 function resetMutate() {
   document.getElementById('mutatePrompt').style.display = '';
   document.getElementById('mutateContent').style.display = 'none';
-  // Reset visibility
-  ['mcA', 'mcB', 'mcDir', 'mcResult'].forEach(id => document.getElementById(id).classList.remove('visible'));
-  document.getElementById('mcSym').classList.remove('visible');
-  document.getElementById('mcBar').classList.remove('visible');
+  document.getElementById('mcResult').classList.remove('visible');
+  document.getElementById('mcEqToggle').classList.remove('visible');
+  document.getElementById('mcEquation').style.display = 'none';
+  document.getElementById('mcEqToggle').textContent = '▸ show equation';
   document.getElementById('mcRtext').textContent = '';
   drawState = 'idle';
+}
+
+function toggleEquation(e) {
+  e.stopPropagation();
+  const eq = document.getElementById('mcEquation');
+  const toggle = document.getElementById('mcEqToggle');
+  if (eq.style.display === 'none') {
+    eq.style.display = '';
+    toggle.textContent = '▾ hide equation';
+  } else {
+    eq.style.display = 'none';
+    toggle.textContent = '▸ show equation';
+  }
 }
 
 function mutate() {
@@ -987,6 +1058,7 @@ function mutate() {
   document.getElementById('mutatePrompt').style.display = 'none';
   document.getElementById('mutateContent').style.display = '';
 
+  // Populate equation data (hidden by default)
   document.getElementById('mcAtext').textContent = '"' + cardA.card + '"';
   document.getElementById('mcAtrad').textContent = '[' + cardA.tradition.toUpperCase() + ']';
   document.getElementById('mcBtext').textContent = '"' + cardB.card + '"';
@@ -994,19 +1066,17 @@ function mutate() {
   document.getElementById('mcDtext').textContent = directive.card;
   document.getElementById('mcDtrad').textContent = '[' + directive.tradition.toUpperCase() + ']';
 
+  // Reset equation toggle
+  document.getElementById('mcEquation').style.display = 'none';
+  document.getElementById('mcEqToggle').textContent = '▸ show equation';
+
   // Generate mutation
   const mutation = generateMutation(cardA, cardB, directive);
 
-  // Staggered reveal: A, ×, B, bar, HOW, then MUTATION result
-  setTimeout(() => document.getElementById('mcA').classList.add('visible'), 0);
-  setTimeout(() => document.getElementById('mcSym').classList.add('visible'), 120);
-  setTimeout(() => document.getElementById('mcB').classList.add('visible'), 240);
-  setTimeout(() => document.getElementById('mcBar').classList.add('visible'), 400);
-  setTimeout(() => document.getElementById('mcDir').classList.add('visible'), 560);
-  setTimeout(() => {
-    document.getElementById('mcRtext').textContent = mutation.text;
-    document.getElementById('mcResult').classList.add('visible');
-  }, 800);
+  // Show result immediately, toggle after
+  document.getElementById('mcRtext').textContent = mutation.text;
+  setTimeout(() => document.getElementById('mcResult').classList.add('visible'), 50);
+  setTimeout(() => document.getElementById('mcEqToggle').classList.add('visible'), 400);
 
   drawState = 'revealed';
 }
