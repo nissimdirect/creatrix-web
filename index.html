@@ -580,67 +580,74 @@ function classifyDirective(text) {
   return best;
 }
 
-// Templates per strategy (anti-corniness: no void/silence/shadow/echo/chaos fallbacks)
+// Grammatical keyword helper — always returns "the {word}" for noun positions
+function kw(parsed, idx = 0, fallback = 'work') {
+  const word = (parsed.keywords && parsed.keywords[idx]) || (parsed.keywords && parsed.keywords[0]) || null;
+  if (!word) return `the ${fallback}`;
+  return `the ${word}`;
+}
+
+// Templates per strategy
 const TEMPLATES = {
   devour: [
-    (a, b) => a.verb && !['let','get','put','set'].includes(a.verb) ? `${capitalize(a.verb)} ${b.object || b.keywords[0] || 'the form'} until it dissolves` : null,
-    (a, b) => `Let ${a.keywords[0] || 'the structure'} absorb ${b.keywords[0] || 'the material'} whole`,
+    (a, b) => a.verb && !['let','get','put','set'].includes(a.verb) ? `${capitalize(a.verb)} ${b.object && b.object.split(' ').length >= 2 ? b.object : kw(b)} until it dissolves` : null,
+    (a, b) => `Let ${kw(a, 0, 'structure')} absorb ${kw(b, 0, 'material')} whole`,
     (a, b) => a.verb && b.verb ? `${capitalize(a.verb)} what ${b.verb}s` : null,
-    (a, b) => `Feed ${b.keywords[0] || 'the work'} to ${a.keywords[0] || 'the process'}`,
-    (a, b) => `What survives when ${a.keywords[0] || 'form'} consumes ${b.keywords[0] || 'content'}?`,
+    (a, b) => `Feed ${kw(b, 0, 'work')} to ${kw(a, 0, 'process')}`,
+    (a, b) => `What survives when ${kw(a, 0, 'form')} consumes ${kw(b, 0, 'content')}?`,
     (a, b) => a.verb && b.verb ? `${capitalize(a.verb)} it bare. Now ${b.verb} from the residue` : null,
-    (a, b) => `Replace ${b.keywords[0] || 'the detail'} entirely with ${a.keywords[0] || 'the structure'}`,
-    (a, b) => `Dissolve ${a.keywords[0] || 'the framework'}. Keep only ${b.keywords[0] || 'the residue'}`,
+    (a, b) => `Replace ${kw(b, 0, 'detail')} entirely with ${kw(a, 0, 'structure')}`,
+    (a, b) => `Dissolve ${kw(a, 0, 'framework')}. Keep only ${kw(b, 0, 'residue')}`,
   ],
   fuse: [
     (a, b) => a.verb && b.verb ? `Where ${a.verb} meets ${b.verb}, stay there` : null,
-    (a, b) => `Half ${a.keywords[0] || 'controlled'}, half ${b.keywords[0] || 'accidental'} -- commit to neither`,
-    (a, b) => `The child of ${a.keywords[0] || 'method'} and ${b.keywords[0] || 'accident'}`,
-    (a, b) => `Merge ${a.keywords[0] || 'familiar'} with ${b.keywords[0] || 'foreign'}`,
+    (a, b) => `Half ${kw(a, 0, 'intent')}, half ${kw(b, 0, 'accident')} -- commit to neither`,
+    (a, b) => `The child of ${kw(a, 0, 'method')} and ${kw(b, 0, 'accident')}`,
+    (a, b) => `Merge ${kw(a, 0, 'familiar')} with ${kw(b, 0, 'foreign')}`,
     (a, b) => a.verb && b.verb ? `What if you ${a.verb} and ${b.verb} at the same time?` : null,
-    (a, b) => `Neither ${a.keywords[0] || 'this'} nor ${b.keywords[0] || 'that'} -- the thing between`,
-    (a, b) => `Half ${a.keywords[0] || 'intent'}, half ${b.keywords[0] || 'mistake'} -- which half wins?`,
-    (a, b) => a.verb && a.keywords[0] ? `${capitalize(a.verb)} ${a.keywords[0]} until ${b.keywords[0] || 'the material'} answers back` : null,
+    (a, b) => `Neither ${kw(a, 0, 'intent')} nor ${kw(b, 0, 'outcome')} -- the thing between`,
+    (a, b) => `Half ${kw(a, 0, 'intent')}, half ${kw(b, 0, 'mistake')} -- which half wins?`,
+    (a, b) => a.verb && a.keywords.length > 0 ? `${capitalize(a.verb)} ${kw(a)} until ${kw(b, 0, 'material')} answers back` : null,
   ],
   translate: [
-    (a, b) => a.verb ? `${capitalize(a.verb)} it in the language of ${b.keywords[0] || 'the body'}` : null,
-    (a, b) => `How would ${b.keywords[0] || 'a child'} express ${a.keywords[0] || 'urgency'}?`,
-    (a, b) => `Rewrite ${a.keywords[0] || 'the rules'} using only ${b.keywords[0] || 'gestures'}`,
-    (a, b) => b.verb ? `${capitalize(b.verb)} ${a.keywords[0] || 'the signal'} into ${b.keywords[0] || 'a different medium'}` : null,
-    (a, b) => `What does ${a.keywords[0] || 'sound'} become when ${b.keywords[0] || 'urgency'} takes over?`,
-    (a, b) => `Misinterpret ${a.keywords[0] || 'the original'} on purpose`,
-    (a, b) => `Say ${a.keywords[0] || 'the difficult part'} in the voice of ${b.keywords[0] || 'someone who hates it'}`,
-    (a, b) => `${capitalize(a.keywords[0] || 'Form')} translated badly is still ${b.keywords[0] || 'form'}`,
+    (a, b) => a.verb ? `${capitalize(a.verb)} it in the language of ${kw(b, 0, 'body')}` : null,
+    (a, b) => `How would ${kw(b, 0, 'child')} express ${kw(a, 0, 'urgency')}?`,
+    (a, b) => `Rewrite ${kw(a, 0, 'rules')} using only ${kw(b, 0, 'gestures')}`,
+    (a, b) => b.verb ? `${capitalize(b.verb)} ${kw(a)} into ${kw(b, 0, 'medium')}` : null,
+    (a, b) => `What does ${kw(a, 0, 'sound')} become when ${kw(b, 0, 'urgency')} takes over?`,
+    (a, b) => `Misinterpret ${kw(a, 0, 'original')} on purpose`,
+    (a, b) => `Say ${kw(a, 0, 'difficult part')} in the voice of ${kw(b, 0, 'critic')}`,
+    (a, b) => `${capitalize(kw(a, 0, 'form'))} translated badly is still ${kw(b, 0, 'form')}`,
   ],
   invert: [
     (a, b) => a.verb && b.verb ? `${capitalize(a.verb)} what hides. ${capitalize(b.verb)} what reveals` : null,
-    (a, b) => `Do the opposite of ${a.keywords[0] || 'order'}. Keep the ${b.keywords[0] || 'residue'}`,
-    (a, b) => `${capitalize(a.keywords[0] || 'Precision')} pretends to be ${b.keywords[0] || 'roughness'}. Call it out`,
-    (a, b) => a.verb ? `The wrong way to ${a.verb} ${b.keywords[0] || 'it'} is the right way` : null,
-    (a, b) => `Turn ${a.keywords[0] || 'strength'} into ${b.keywords[0] || 'weakness'} -- is it better?`,
-    (a, b) => `Everything you know about ${a.keywords[0] || 'form'} is wrong`,
-    (a, b) => `Reverse the ${a.keywords[0] || 'process'}. Start from ${b.keywords[0] || 'the end'}`,
-    (a, b) => `The opposite of ${a.keywords[0] || 'precision'} is not ${b.keywords[0] || 'roughness'}`,
+    (a, b) => `Do the opposite of ${kw(a, 0, 'order')}. Keep ${kw(b, 0, 'residue')}`,
+    (a, b) => `${capitalize(kw(a, 0, 'precision'))} pretends to be ${kw(b, 0, 'roughness')}. Call it out`,
+    (a, b) => a.verb ? `The wrong way to ${a.verb} ${kw(b)} is the right way` : null,
+    (a, b) => `Turn ${kw(a, 0, 'strength')} into ${kw(b, 0, 'weakness')} -- is it better?`,
+    (a, b) => `Everything you know about ${kw(a, 0, 'form')} is wrong`,
+    (a, b) => `Reverse ${kw(a, 0, 'process')}. Start from ${kw(b, 0, 'end')}`,
+    (a, b) => `The opposite of ${kw(a, 0, 'precision')} is not ${kw(b, 0, 'roughness')}`,
   ],
   metaphor: [
-    (a, b) => b.verb ? `Think about ${a.keywords[0] || 'the work'} while you ${b.verb}` : null,
-    (a, b) => `${capitalize(a.keywords[0] || 'Sound')} is a container for ${b.keywords[0] || 'the raw material'}`,
-    (a, b) => `The map says ${a.keywords[0] || 'here'}. The territory says ${b.keywords[0] || 'elsewhere'}`,
-    (a, b) => `Treat ${a.keywords[0] || 'the work'} as if it were ${b.keywords[0] || 'alive'}`,
-    (a, b) => `What orbit does ${a.keywords[0] || 'form'} trace around ${b.keywords[0] || 'the difficult part'}?`,
-    (a, b) => `${capitalize(a.keywords[0] || 'Rhythm')} is the structure. ${capitalize(b.keywords[0] || 'Space')} is the pause`,
-    (a, b) => `If ${a.keywords[0] || 'this'} had weight, how heavy would ${b.keywords[0] || 'it'} make it?`,
-    (a, b) => b.verb ? `${capitalize(b.verb)} ${a.keywords[0] || 'the work'} like a secret` : `Carry ${a.keywords[0] || 'the work'} like a secret`,
+    (a, b) => b.verb ? `Think about ${kw(a, 0, 'work')} while you ${b.verb}` : null,
+    (a, b) => `${capitalize(kw(a, 0, 'sound'))} is a container for ${kw(b, 0, 'raw material')}`,
+    (a, b) => `The map says ${kw(a, 0, 'safety')}. The territory says ${kw(b, 0, 'danger')}`,
+    (a, b) => `Treat ${kw(a, 0, 'work')} as if it were ${kw(b, 0, 'opposite')}`,
+    (a, b) => `What orbit does ${kw(a, 0, 'form')} trace around ${kw(b, 0, 'center')}?`,
+    (a, b) => `${capitalize(kw(a, 0, 'rhythm'))} is the structure. ${capitalize(kw(b, 0, 'space'))} is the pause`,
+    (a, b) => `If ${kw(a, 0, 'sound')} had weight, how heavy would ${kw(b, 0, 'feeling')} make it?`,
+    (a, b) => `Carry ${kw(a, 0, 'work')} like a secret`,
   ],
   collide: [
-    (a, b) => `Crash ${a.keywords[0] || 'order'} into ${b.keywords[0] || 'accident'} -- use what survives`,
-    (a, b) => a.verb ? `${capitalize(a.verb)} ${a.keywords[0] || 'form'} at ${b.keywords[0] || 'full speed'}. Keep the shrapnel` : null,
-    (a, b) => `Maximum velocity: ${a.keywords[0] || 'signal'} meets ${b.keywords[0] || 'static'}`,
-    (a, b) => `The debris of ${a.keywords[0] || 'method'} and ${b.keywords[0] || 'instinct'} is the material`,
-    (a, b) => `Stack ${a.keywords[0] || 'layers'}. Remove ${b.keywords[0] || 'the foundation'}`,
-    (a, b) => `Force ${a.keywords[0] || 'the elements'} together. Keep only what fused`,
-    (a, b) => `${capitalize(a.keywords[0] || 'Form')} and ${b.keywords[0] || 'content'} collide. Pick through the wreckage`,
-    (a, b) => `Throw ${a.keywords[0] || 'precision'} against ${b.keywords[0] || 'the opposite'}`,
+    (a, b) => `Crash ${kw(a, 0, 'order')} into ${kw(b, 0, 'accident')} -- use what survives`,
+    (a, b) => a.verb ? `${capitalize(a.verb)} ${kw(a, 0, 'form')} at ${kw(b, 0, 'speed')}. Keep the shrapnel` : null,
+    (a, b) => `Maximum velocity: ${kw(a, 0, 'signal')} meets ${kw(b, 0, 'static')}`,
+    (a, b) => `The debris of ${kw(a, 0, 'method')} and ${kw(b, 0, 'instinct')} is the material`,
+    (a, b) => `Stack ${kw(a, 0, 'layers')}. Remove ${kw(b, 0, 'foundation')}`,
+    (a, b) => `Force ${kw(a, 0, 'elements')} together. Keep only what fused`,
+    (a, b) => `${capitalize(kw(a, 0, 'form'))} and ${kw(b, 0, 'content')} collide. Pick through the wreckage`,
+    (a, b) => `Throw ${kw(a, 0, 'precision')} against ${kw(b, 0, 'opposite')}`,
   ],
 };
 
@@ -744,6 +751,11 @@ function qualityGate(text) {
     /\b(its|your|their|our)\s*[.!?]?\s*$/,
     /\b(\w+)\s+\1\b/i,
     /\b(the|a)\s+(the|a)\b/i,
+    /\bthe\s+\w+ly\b/i,  // "the directly" — adverbs
+    /\bthe\s+(anyone|everyone|someone|nobody|somebody|nothing|everything|something)\b/i,
+    /\bthe\s+\w+'s\b/i,  // "the children's" — possessives
+    /\bthe\s+\w+'t\b/i,  // "the don't" — contractions
+    /\bthe\s+\w+\s+the\s+\w+\s+the\b/i,  // triple "the" in 5 words
   ];
   for (const pattern of BROKEN_PATTERNS) {
     if (pattern.test(text)) return false;
