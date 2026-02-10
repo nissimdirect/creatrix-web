@@ -259,6 +259,36 @@
     opacity: 1;
     transform: translateY(0);
   }
+  .mutate-result {
+    margin-top: 12px;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .mutate-result.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .mutate-result-bar {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    overflow: hidden;
+  }
+  .mutate-result-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+    letter-spacing: 0.3em;
+    margin-bottom: 8px;
+  }
+  .mutate-result-text {
+    font-size: 18px;
+    color: var(--text-brt);
+    text-align: center;
+    line-height: 1.6;
+    padding: 4px 8px;
+  }
 
   /* Hints */
   .hints {
@@ -330,6 +360,11 @@
         <div class="mutate-how-text" id="mcDtext"></div>
         <div class="mutate-how-trad" id="mcDtrad"></div>
       </div>
+      <div class="mutate-result" id="mcResult">
+        <div class="mutate-result-bar" id="mcResultBar"></div>
+        <div class="mutate-result-label">=== MUTATION ===</div>
+        <div class="mutate-result-text" id="mcRtext"></div>
+      </div>
     </div>
   </div>
 
@@ -356,6 +391,370 @@ const deckSize = allCards.length;
 
 document.getElementById('deckCount').textContent = deckSize;
 
+// ── MUTATION ENGINE (3-layer pipeline) ────────────────────────────────
+
+// Stop words for parsing
+const STOP = new Set(['the','a','an','is','it','of','in','to','and','or','this',
+  'not','you','your','what','how','as','with','for','its','that','are','do',
+  'be','if','so','on','at','by','no','but','was','has','had','can','will',
+  'would','should','could','into','from','than','then','them','they','does',
+  'did','been','have','were','when','where','which','while','more','most',
+  'now','also','just','like','only','very','some','each','much','don\'t']);
+
+// Imperative verbs for card parsing
+const IMP_VERBS = new Set([
+  'make','do','use','try','take','give','put','let','get','find','remove',
+  'cut','break','steal','build','write','play','set','run','turn','show',
+  'name','treat','honor','trust','refuse','admit','identify','dedicate',
+  'teach','perform','translate','invert','convert','sabotage','embrace',
+  'solo','weaponize','automate','bury','interview','corrupt','connect',
+  'construct','apply','create','leave','hear','wander','design','imagine',
+  'abandon','accept','change','add','subtract','phase','color','meet',
+  'endure','ritualize','glitch','mourn','tend','replace','question',
+  'center','cook','box','mail','drift','critique','enumerate','repeat',
+  'risk','render','circulate','describe','discover','display','emphasize',
+  'feed','fill','go','humanize','listen','look','move','mute','pay',
+  'remember','retrace','shut','state','tape','think','tidy','voice',
+  'work','call','consider','consult','define','discard','disconnect',
+  'first','list','magnify','mechanize','balance','breathe'
+]);
+
+// Layer 1: Markov chain
+const _bigrams = {};
+const _allTexts = [];
+(function buildMarkov() {
+  const texts = [
+    ...ORIGINALS,
+    ...MUTANTS.map(m => m.card)
+  ];
+  for (const text of texts) {
+    const words = text.toLowerCase().replace(/[^a-z\s'-]/g, '').split(/\s+/).filter(Boolean);
+    _allTexts.push(words);
+    for (let i = 0; i < words.length - 1; i++) {
+      if (!_bigrams[words[i]]) _bigrams[words[i]] = [];
+      _bigrams[words[i]].push(words[i + 1]);
+    }
+  }
+})();
+
+function markovGenerate(seeds, maxLen) {
+  // Try each seed, walk the chain
+  for (const seed of seeds) {
+    const s = seed.toLowerCase();
+    if (!_bigrams[s]) continue;
+    const out = [seed];
+    let cur = s;
+    for (let i = 0; i < maxLen - 1; i++) {
+      const nexts = _bigrams[cur];
+      if (!nexts || nexts.length === 0) break;
+      const next = nexts[Math.floor(Math.random() * nexts.length)];
+      out.push(next);
+      // Stop at natural sentence boundaries after 5+ words
+      if (out.length >= 5 && /[.!?]/.test(next)) break;
+      cur = next;
+    }
+    // Must be 5-11 words for quality
+    if (out.length >= 5 && out.length <= 11) return out.join(' ');
+  }
+  return null;
+}
+
+// Layer 2: Template recombination
+function parseCard(text) {
+  const words = text.replace(/["""]/g, '').split(/\s+/).filter(Boolean);
+  const lower = words.map(w => w.toLowerCase().replace(/[^a-z'-]/g, ''));
+  let verb = null, object = null, keywords = [];
+
+  // Extract verb (first imperative-looking word)
+  if (lower.length > 0 && IMP_VERBS.has(lower[0])) {
+    verb = lower[0];
+    // Object is the rest up to a period/comma
+    const rest = words.slice(1);
+    const objWords = [];
+    for (const w of rest) {
+      if (/[.;!?]$/.test(w)) { objWords.push(w.replace(/[.;!?]$/, '')); break; }
+      objWords.push(w);
+      if (objWords.length >= 5) break;
+    }
+    object = objWords.join(' ').toLowerCase() || null;
+  }
+
+  // Non-noun words to exclude from keyword extraction
+  const BAD_KW = new Set([...IMP_VERBS, ...STOP, ...PLACEHOLDER,
+    'until','away','through','around','behind','between','below','above',
+    'about','after','before','during','inside','outside','without','within',
+    'against','along','across','toward','towards','beyond','under','over',
+    'every','really','already','enough','still','always','never','often',
+    'quite','rather','almost','back','down','here','there','right','left',
+    'first','last','next','other','same','such','whole','else','own',
+    "what's","that's","it's","don't","can't","won't","isn't","aren't",
+    'explain','degrade','less','more','using','called','simply','possible']);
+
+  // Pass 1: nouns/adjectives only (4+ chars, not in any blacklist)
+  for (const w of lower) {
+    if (w.length > 3 && !BAD_KW.has(w) && !keywords.includes(w)) keywords.push(w);
+    if (keywords.length >= 4) break;
+  }
+  // Pass 2: relax to 3-char words
+  if (keywords.length === 0) {
+    for (const w of lower) {
+      if (w.length > 2 && !STOP.has(w) && !PLACEHOLDER.has(w) && !keywords.includes(w)) keywords.push(w);
+      if (keywords.length >= 2) break;
+    }
+  }
+  // Pass 3: desperate — use card's main subject
+  if (keywords.length === 0) {
+    keywords.push(lower.find(w => w.length > 2) || 'work');
+  }
+
+  return { verb, object, keywords, raw: text };
+}
+
+// Strategy classification from directive text
+const STRATEGY_KW = {
+  devour:    ['devour','die','corrupt','consume','destroy','kill','disease','cure'],
+  fuse:      ['love','child','layer','middle','cancel','merge','between'],
+  translate: ['translate','language','method','solve','interpret','speaks'],
+  invert:    ['opposite','shadow','mask','wrong','forgery','sides'],
+  metaphor:  ['map','territory','container','dream','orbit','memory','rhythm','silence'],
+  collide:   ['collide','fight','debris','velocity','heckle','remove','stack']
+};
+
+function classifyDirective(text) {
+  const lower = text.toLowerCase();
+  let best = 'fuse', bestCount = 0;
+  for (const [strategy, kws] of Object.entries(STRATEGY_KW)) {
+    const count = kws.filter(k => lower.includes(k)).length;
+    if (count > bestCount) { bestCount = count; best = strategy; }
+  }
+  return best;
+}
+
+// Templates per strategy
+const TEMPLATES = {
+  devour: [
+    (a, b) => a.verb ? `${capitalize(a.verb)} ${b.object || b.keywords[0] || 'the form'} until it dissolves` : null,
+    (a, b) => `Let ${a.keywords[0] || 'silence'} swallow ${b.keywords[0] || 'sound'} whole`,
+    (a, b) => a.verb && b.verb ? `${capitalize(a.verb)} what ${b.verb}s` : null,
+    (a, b) => `Feed ${b.keywords[0] || 'the work'} to ${a.keywords[0] || 'the void'}`,
+    (a, b) => `What survives when ${a.keywords[0] || 'form'} consumes ${b.keywords[0] || 'content'}?`,
+    (a, b) => a.verb && b.verb ? `${capitalize(a.verb)} it bare. Now ${b.verb} from the residue` : null,
+    (a, b) => `The ${a.keywords[0] || 'signal'} eats the ${b.keywords[0] || 'noise'} alive`,
+    (a, b) => `Dissolve ${a.keywords[0] || 'the structure'}. Keep only ${b.keywords[0] || 'the echo'}`,
+  ],
+  fuse: [
+    (a, b) => a.verb && b.verb ? `Where ${a.verb} meets ${b.verb}, stay there` : null,
+    (a, b) => `Half ${a.keywords[0] || 'signal'}, half ${b.keywords[0] || 'silence'} -- commit to neither`,
+    (a, b) => `The child of ${a.keywords[0] || 'order'} and ${b.keywords[0] || 'chaos'}`,
+    (a, b) => `Merge ${a.keywords[0] || 'familiar'} with ${b.keywords[0] || 'alien'}`,
+    (a, b) => a.verb && b.verb ? `What ${a.verb}s and ${b.verb}s at the same time?` : null,
+    (a, b) => `Neither ${a.keywords[0] || 'signal'} nor ${b.keywords[0] || 'silence'} -- the thing between`,
+    (a, b) => `${a.keywords[0] || 'Form'} and ${b.keywords[0] || 'void'} walk into a room. Only one leaves`,
+    (a, b) => a.verb ? `${capitalize(a.verb)} until ${b.keywords[0] || 'silence'} answers back` : null,
+  ],
+  translate: [
+    (a, b) => a.verb ? `${capitalize(a.verb)} it in the language of ${b.keywords[0] || 'silence'}` : null,
+    (a, b) => `How would ${b.keywords[0] || 'water'} express ${a.keywords[0] || 'fire'}?`,
+    (a, b) => `Rewrite ${a.keywords[0] || 'the rules'} using only ${b.keywords[0] || 'gestures'}`,
+    (a, b) => b.verb ? `${capitalize(b.verb)} ${a.keywords[0] || 'the signal'} into ${b.keywords[0] || 'light'}` : null,
+    (a, b) => `What does ${a.keywords[0] || 'sound'} become in ${b.keywords[0] || 'foreign'} hands?`,
+    (a, b) => `Misinterpret ${a.keywords[0] || 'the original'} on purpose`,
+    (a, b) => `Say ${a.keywords[0] || 'the unsaid'} in the voice of ${b.keywords[0] || 'a stranger'}`,
+    (a, b) => `${capitalize(a.keywords[0] || 'Form')} translated badly is still ${b.keywords[0] || 'form'}`,
+  ],
+  invert: [
+    (a, b) => a.verb && b.verb ? `What ${a.verb}s hides. What ${b.verb}s reveals` : null,
+    (a, b) => `Do the opposite of ${a.keywords[0] || 'order'}. Keep the ${b.keywords[0] || 'residue'}`,
+    (a, b) => `${capitalize(a.keywords[0] || 'Light')} is the shadow of ${b.keywords[0] || 'dark'}`,
+    (a, b) => a.verb ? `The wrong way to ${a.verb} ${b.keywords[0] || 'it'} is the right way` : null,
+    (a, b) => `Turn ${a.keywords[0] || 'strength'} into ${b.keywords[0] || 'weakness'} -- is it better?`,
+    (a, b) => `Everything you know about ${a.keywords[0] || 'form'} is wrong`,
+    (a, b) => `Reverse the ${a.keywords[0] || 'process'}. Start from ${b.keywords[0] || 'the end'}`,
+    (a, b) => `The opposite of ${a.keywords[0] || 'beauty'} is not ${b.keywords[0] || 'ugliness'}`,
+  ],
+  metaphor: [
+    (a, b) => b.verb ? `Dream of ${a.keywords[0] || 'silence'} while you ${b.verb}` : null,
+    (a, b) => `${capitalize(a.keywords[0] || 'Sound')} is a container for ${b.keywords[0] || 'silence'}`,
+    (a, b) => `The map says ${a.keywords[0] || 'here'}. The territory says ${b.keywords[0] || 'elsewhere'}`,
+    (a, b) => `Treat ${a.keywords[0] || 'the work'} as if it were ${b.keywords[0] || 'alive'}`,
+    (a, b) => `What orbit does ${a.keywords[0] || 'form'} trace around ${b.keywords[0] || 'void'}?`,
+    (a, b) => `${capitalize(a.keywords[0] || 'Memory')} is the rhythm. ${capitalize(b.keywords[0] || 'Silence')} is the pause`,
+    (a, b) => `If ${a.keywords[0] || 'sound'} were weather, describe the storm`,
+    (a, b) => b.verb ? `${capitalize(b.verb)} ${a.keywords[0] || 'the work'} like a secret` : `Carry ${a.keywords[0] || 'the work'} like a secret`,
+  ],
+  collide: [
+    (a, b) => `Crash ${a.keywords[0] || 'order'} into ${b.keywords[0] || 'chaos'} -- use what survives`,
+    (a, b) => a.verb ? `${capitalize(a.verb)} ${a.keywords[0] || 'form'} at ${b.keywords[0] || 'void'}. Keep the shrapnel` : null,
+    (a, b) => `Maximum velocity: ${a.keywords[0] || 'signal'} meets ${b.keywords[0] || 'static'}`,
+    (a, b) => `The debris of ${a.keywords[0] || 'method'} and ${b.keywords[0] || 'madness'} is the material`,
+    (a, b) => `Stack ${a.keywords[0] || 'layers'}. Remove ${b.keywords[0] || 'the foundation'}`,
+    (a, b) => `Smash them together. The sparks are the work`,
+    (a, b) => `${capitalize(a.keywords[0] || 'Form')} and ${b.keywords[0] || 'content'} collide. Pick through the wreckage`,
+    (a, b) => `Throw ${a.keywords[0] || 'precision'} against ${b.keywords[0] || 'chaos'}`,
+  ],
+};
+
+// Layer 3: Semantic fallback
+const TRADITION_SEM = {
+  'Eno/Schmidt':                { mood: 'oracular',    action: 'observe' },
+  'SITUATIONIST INTERNATIONAL': { mood: 'subversive',  action: 'detourne' },
+  'FLUXUS':                     { mood: 'playful',     action: 'score' },
+  'CONCEPTUAL ART':             { mood: 'systematic',  action: 'enumerate' },
+  'PERFORMANCE ART':            { mood: 'visceral',    action: 'endure' },
+  'INSTITUTIONAL CRITIQUE':     { mood: 'skeptical',   action: 'name' },
+  'RELATIONAL AESTHETICS':      { mood: 'convivial',   action: 'invite' },
+  'POST-INTERNET':              { mood: 'ambient',     action: 'circulate' },
+  'DECOLONIAL THEORY':          { mood: 'resistant',   action: 'refuse' },
+  'FEMINIST ART':               { mood: 'tender',      action: 'nurture' },
+  'SOUND STUDIES / DEEP LISTENING': { mood: 'patient', action: 'listen' },
+  'GLITCH THEORY':              { mood: 'chaotic',     action: 'break' },
+  'NEW MATERIALISM':            { mood: 'curious',     action: 'attend' },
+  'HAUNTOLOGY':                 { mood: 'spectral',    action: 'remember' },
+  'AFRO-FUTURISM':              { mood: 'mythic',      action: 'invent' },
+  'DADA / SURREALISM':          { mood: 'absurd',      action: 'chance' },
+  'MINIMALISM':                 { mood: 'reductive',   action: 'subtract' },
+  'NOISE / INDUSTRIAL':         { mood: 'aggressive',  action: 'assault' },
+  'PUNK / DIY':                 { mood: 'urgent',      action: 'ship' },
+  'SYSTEMS / GENERATIVE':       { mood: 'procedural',  action: 'automate' },
+  'LAND ART / ENTROPY':         { mood: 'geological',  action: 'erode' },
+  'DESIGN / TYPOGRAPHY':        { mood: 'precise',     action: 'compose' },
+  'CROSS-MODAL':                { mood: 'synesthetic', action: 'translate' },
+  'DANGER':                     { mood: 'volatile',    action: 'confront' },
+  'Mutation':                   { mood: 'mutant',      action: 'fuse' },
+};
+
+const SEM_TEMPLATES = [
+  (sa, sb) => `Find the ${sa.mood} form of ${sb.action}`,
+  (sa, sb) => `${capitalize(sa.action)} with ${sb.mood} intensity`,
+  (sa, sb) => `What happens when ${sa.mood} meets ${sb.mood}?`,
+  (sa, sb) => `${capitalize(sb.action)} until it becomes ${sa.mood}`,
+  (sa, sb) => `The ${sa.mood} way to ${sb.action}`,
+  (sa, sb) => `${capitalize(sa.action)} what is ${sb.mood}. ${capitalize(sb.action)} what is ${sa.mood}`,
+  (sa, sb) => `Be ${sa.mood} about ${sb.action}. Be ${sb.mood} about ${sa.action}`,
+  (sa, sb) => `${capitalize(sa.action)} like you mean it. ${capitalize(sb.action)} like you don't`,
+];
+
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// Quality gate
+const _existingLower = new Set([
+  ...ORIGINALS.map(c => c.toLowerCase()),
+  ...MUTANTS.map(m => m.card.toLowerCase())
+]);
+const _recentMutations = [];
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({length: n + 1}, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = a[i-1] === b[j-1] ? prev[j-1] : 1 + Math.min(prev[j-1], prev[j], cur[j-1]);
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
+const FILLER = new Set(['perhaps','consider','maybe','try to','basically','simply','just']);
+const PLACEHOLDER = new Set(['something','everything','nothing','noise','stuff','thing',
+  'things','anything','someone','somewhere','make','let','get','put','set','do']);
+const VOICE_STARTERS = new Set([
+  ...IMP_VERBS, 'what','how','where','who','when','why','which',
+  'the','a','if','no','neither','half','dream','maximum','impact'
+]);
+
+function qualityGate(text) {
+  if (!text) return false;
+  const words = text.split(/\s+/).filter(Boolean);
+  // Length: 4-15 words
+  if (words.length < 4 || words.length > 15) return false;
+  // At least 3 real words (>2 chars)
+  if (words.filter(w => w.replace(/[^a-z]/gi, '').length > 2).length < 3) return false;
+  // Voice: must start with a recognized starter word
+  const firstWord = words[0].toLowerCase().replace(/[^a-z]/g, '');
+  if (!VOICE_STARTERS.has(firstWord)) return false;
+  // No filler words
+  const lower = text.toLowerCase();
+  for (const f of FILLER) { if (lower.includes(f)) return false; }
+  // No placeholder words in key positions (not first word)
+  const lowerWords = lower.split(/\s+/);
+  const placeholderCount = lowerWords.slice(1).filter(w => PLACEHOLDER.has(w.replace(/[^a-z]/g,''))).length;
+  if (placeholderCount >= 2) return false;
+  // Uniqueness vs existing deck
+  for (const existing of _existingLower) {
+    if (levenshtein(lower, existing) < 5) return false;
+  }
+  // Not a recent mutation
+  if (_recentMutations.includes(lower)) return false;
+  return true;
+}
+
+function recordMutation(text) {
+  _recentMutations.push(text.toLowerCase());
+  if (_recentMutations.length > 20) _recentMutations.shift();
+}
+
+// Main mutation pipeline
+function generateMutation(cardA, cardB, directive) {
+  const tradA = cardA.tradition || 'Eno/Schmidt';
+  const tradB = cardB.tradition || 'Eno/Schmidt';
+  const textA = cardA.card;
+  const textB = cardB.card;
+  const dirText = directive.card;
+
+  const strategy = classifyDirective(dirText);
+  const pA = parseCard(textA);
+  const pB = parseCard(textB);
+
+  // Layer 1: Markov
+  const seeds = [...(pA.keywords || []), ...(pB.keywords || [])].filter(Boolean);
+  // Shuffle seeds based on strategy
+  if (strategy === 'devour' && pA.verb) seeds.unshift(pA.verb);
+  if (strategy === 'collide') seeds.sort(() => Math.random() - 0.5);
+  const markovResult = markovGenerate(seeds, 10);
+  if (markovResult && qualityGate(markovResult)) {
+    const result = capitalize(markovResult);
+    recordMutation(result);
+    return { text: result, layer: 'markov' };
+  }
+
+  // Layer 2: Templates (try multiple strategies if primary fails)
+  const strategyOrder = [strategy, ...Object.keys(TEMPLATES).filter(s => s !== strategy)];
+  for (const strat of strategyOrder.slice(0, 3)) {
+    const templates = TEMPLATES[strat] || TEMPLATES.fuse;
+    const shuffled = [...templates].sort(() => Math.random() - 0.5);
+    for (const tmpl of shuffled) {
+      const result = tmpl(pA, pB);
+      if (result && qualityGate(result)) {
+        const final = capitalize(result);
+        recordMutation(final);
+        return { text: final, layer: 'template' };
+      }
+    }
+  }
+
+  // Layer 3: Semantic
+  const semA = TRADITION_SEM[tradA] || TRADITION_SEM['Eno/Schmidt'];
+  const semB = TRADITION_SEM[tradB] || TRADITION_SEM['Eno/Schmidt'];
+  const semShuffled = [...SEM_TEMPLATES].sort(() => Math.random() - 0.5);
+  for (const tmpl of semShuffled) {
+    const result = tmpl(semA, semB);
+    if (qualityGate(result)) {
+      const final = capitalize(result);
+      recordMutation(final);
+      return { text: final, layer: 'semantic' };
+    }
+  }
+
+  // Ultimate fallback
+  const fallback = `Let "${textA}" transform "${textB}"`;
+  recordMutation(fallback);
+  return { text: fallback, layer: 'fallback' };
+}
+
 // Build frame lines
 function buildFrame() {
   const w = document.querySelector('.frame').offsetWidth;
@@ -365,6 +764,7 @@ function buildFrame() {
   document.getElementById('sepLine').textContent = '╠' + '═'.repeat(chars - 2) + '╣';
   const barChars = Math.floor((w - 40) / 8);
   document.getElementById('mcBar').textContent = '▓'.repeat(barChars);
+  document.getElementById('mcResultBar').textContent = '▓'.repeat(barChars);
 }
 buildFrame();
 window.addEventListener('resize', buildFrame);
@@ -442,36 +842,43 @@ function resetMutate() {
   document.getElementById('mutatePrompt').style.display = '';
   document.getElementById('mutateContent').style.display = 'none';
   // Reset visibility
-  ['mcA', 'mcB', 'mcDir'].forEach(id => document.getElementById(id).classList.remove('visible'));
+  ['mcA', 'mcB', 'mcDir', 'mcResult'].forEach(id => document.getElementById(id).classList.remove('visible'));
   document.getElementById('mcSym').classList.remove('visible');
   document.getElementById('mcBar').classList.remove('visible');
+  document.getElementById('mcRtext').textContent = '';
   drawState = 'idle';
 }
 
 function mutate() {
-  const pool = [...allCards, ...DIRECTIVES.map(d => ({ card: d[0], tradition: d[1] }))];
-  const picks = [];
-  while (picks.length < 3) {
-    const p = pool[Math.floor(Math.random() * pool.length)];
-    picks.push(p);
-  }
+  // Pick A and B from card deck, directive from DIRECTIVES
+  const cardA = allCards[Math.floor(Math.random() * allCards.length)];
+  const cardB = allCards[Math.floor(Math.random() * allCards.length)];
+  const dirPick = DIRECTIVES[Math.floor(Math.random() * DIRECTIVES.length)];
+  const directive = { card: dirPick[0], tradition: dirPick[1] };
 
   document.getElementById('mutatePrompt').style.display = 'none';
   document.getElementById('mutateContent').style.display = '';
 
-  document.getElementById('mcAtext').textContent = '"' + picks[0].card + '"';
-  document.getElementById('mcAtrad').textContent = '[' + picks[0].tradition.toUpperCase() + ']';
-  document.getElementById('mcBtext').textContent = '"' + picks[1].card + '"';
-  document.getElementById('mcBtrad').textContent = '[' + picks[1].tradition.toUpperCase() + ']';
-  document.getElementById('mcDtext').textContent = picks[2].card;
-  document.getElementById('mcDtrad').textContent = '[' + picks[2].tradition.toUpperCase() + ']';
+  document.getElementById('mcAtext').textContent = '"' + cardA.card + '"';
+  document.getElementById('mcAtrad').textContent = '[' + cardA.tradition.toUpperCase() + ']';
+  document.getElementById('mcBtext').textContent = '"' + cardB.card + '"';
+  document.getElementById('mcBtrad').textContent = '[' + cardB.tradition.toUpperCase() + ']';
+  document.getElementById('mcDtext').textContent = directive.card;
+  document.getElementById('mcDtrad').textContent = '[' + directive.tradition.toUpperCase() + ']';
 
-  // Staggered reveal
+  // Generate mutation
+  const mutation = generateMutation(cardA, cardB, directive);
+
+  // Staggered reveal: A, ×, B, bar, HOW, then MUTATION result
   setTimeout(() => document.getElementById('mcA').classList.add('visible'), 0);
   setTimeout(() => document.getElementById('mcSym').classList.add('visible'), 120);
   setTimeout(() => document.getElementById('mcB').classList.add('visible'), 240);
   setTimeout(() => document.getElementById('mcBar').classList.add('visible'), 400);
   setTimeout(() => document.getElementById('mcDir').classList.add('visible'), 560);
+  setTimeout(() => {
+    document.getElementById('mcRtext').textContent = mutation.text;
+    document.getElementById('mcResult').classList.add('visible');
+  }, 800);
 
   drawState = 'revealed';
 }
