@@ -312,7 +312,8 @@
 
   <div class="tabs">
     <span class="tab active" id="tabDraw" onclick="setMode('draw')">[▓ DRAW ▓]</span>
-    <span class="tab" id="tabMutate" onclick="setMode('mutate')">[ MUTATE ]</span>
+    <!-- MUTATE tab hidden — feature flagged off, revisit week of 2026-02-16 -->
+    <span class="tab" id="tabMutate" onclick="setMode('mutate')" style="display:none">[ MUTATE ]</span>
   </div>
   <div class="separator" id="sepLine"></div>
 
@@ -360,7 +361,7 @@
     </div>
   </div>
 
-  <div class="hints" id="hints">[ TAP ] draw  |  [ M ] mode  |  <span id="deckCount">430</span></div>
+  <div class="hints" id="hints">[ TAP ] draw  |  <span id="deckCount">430</span></div>
   <div class="frame-bot" id="frameBot"></div>
 </div>
 
@@ -990,10 +991,9 @@ function setMode(m) {
     resetMutate();
   }
 
-  const action = mode === 'draw' ? 'draw' : 'mutate';
-  const other = mode === 'draw' ? 'mutate' : 'draw';
+  // MUTATE feature flagged off — hints only show draw mode
   document.getElementById('hints').innerHTML =
-    `[ TAP ] ${action}  |  [ M ] ${other}  |  <span id="deckCount">${deckSize}</span>`;
+    `[ TAP ] draw  |  <span id="deckCount">${deckSize}</span>`;
 }
 
 // ── DRAW MODE ──────────────────────────────────────────────────────────
@@ -1106,7 +1106,8 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     handleAction();
   } else if (e.key === 'm' || e.key === 'M') {
-    setMode(mode === 'draw' ? 'mutate' : 'draw');
+    // MUTATE mode feature flagged off — revisit week of 2026-02-16
+    // setMode(mode === 'draw' ? 'mutate' : 'draw');
   }
 });
 </script>
