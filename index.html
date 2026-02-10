@@ -416,7 +416,7 @@ const IMP_VERBS = new Set([
   'feed','fill','go','humanize','listen','look','move','mute','pay',
   'remember','retrace','shut','state','tape','think','tidy','voice',
   'work','call','consider','consult','define','discard','disconnect',
-  'first','list','magnify','mechanize','balance','breathe'
+  'list','magnify','mechanize','balance','breathe'
 ]);
 
 // Layer 1: Markov chain
@@ -437,6 +437,24 @@ const _allTexts = [];
   }
 })();
 
+// Fix 1: Noun-quality scoring — words appearing after verbs are likely nouns
+const _nounScores = {};
+(function buildNounScores() {
+  for (const words of _allTexts) {
+    for (let i = 0; i < words.length - 1; i++) {
+      if (IMP_VERBS.has(words[i])) {
+        const next = words[i + 1];
+        if (next && next.length > 2 && !STOP.has(next)) {
+          _nounScores[next] = (_nounScores[next] || 0) + 1;
+        }
+      }
+    }
+  }
+})();
+
+// Fix 2: Template fingerprint dedup — avoid repeating same template
+const _recentTemplateIds = [];
+
 function markovGenerate(seeds, maxLen) {
   // Try each seed, walk the chain
   for (const seed of seeds) {
@@ -454,7 +472,7 @@ function markovGenerate(seeds, maxLen) {
       cur = next;
     }
     // Must be 5-11 words for quality
-    if (out.length >= 5 && out.length <= 11) return out.join(' ');
+    if (out.length >= 5 && out.length <= 9) return out.join(' ');
   }
   return null;
 }
@@ -463,12 +481,11 @@ function markovGenerate(seeds, maxLen) {
 function parseCard(text) {
   const words = text.replace(/["""]/g, '').split(/\s+/).filter(Boolean);
   const lower = words.map(w => w.toLowerCase().replace(/[^a-z'-]/g, ''));
-  let verb = null, object = null, keywords = [];
+  let verb = null, object = null, keywords = [], nouns = [], adjectives = [];
 
   // Extract verb (first imperative-looking word)
   if (lower.length > 0 && IMP_VERBS.has(lower[0])) {
     verb = lower[0];
-    // Object is the rest up to a period/comma
     const rest = words.slice(1);
     const objWords = [];
     for (const w of rest) {
@@ -488,26 +505,59 @@ function parseCard(text) {
     'quite','rather','almost','back','down','here','there','right','left',
     'first','last','next','other','same','such','whole','else','own',
     "what's","that's","it's","don't","can't","won't","isn't","aren't",
-    'explain','degrade','less','more','using','called','simply','possible']);
+    'explain','degrade','less','more','using','called','simply','possible',
+    'those','these','even','done','meant','owed','sudden','actually','recently',
+    'suddenly','wouldn\'t','couldn\'t','shouldn\'t','itself','himself','herself',
+    'themselves','myself','maybe','either','another',
+    'reveals','survives','hurts','hides','becomes','carries','shows','controls',
+    'remains','frightened','disconnected','embarrassing','performing','repeating',
+    'lives','means','says','serves','exists','needs','wants','seems','looks',
+    'feels','different','deeply','worse','worst','real','lowest','missing',
+    'avoid','capture','safe','sure','hard','long','quite','fast','slow','big',
+    'silence','taught','paid','open','close','began','spoken','chosen','driven']);
 
-  // Pass 1: nouns/adjectives only (4+ chars, not in any blacklist)
+  // Fix 3: Suffix-based POS classification
+  const NOUN_SUFFIXES = /(?:tion|sion|ness|ment|ity|ence|ance|ism|ist|ure|age)$/;
+  const ADJ_SUFFIXES = /(?:ful|less|ous|ive|ent|ant|ible|able|ical|etic)$/;
+  const VERB_SUFFIXES = /(?:ized|ated|ified|izing|ating|ifying)$/;
+
+  // Pass 1: scored keyword extraction (4+ chars, not in blacklist)
+  const candidates = [];
   for (const w of lower) {
-    if (w.length > 3 && !BAD_KW.has(w) && !keywords.includes(w)) keywords.push(w);
-    if (keywords.length >= 4) break;
+    if (w.length > 3 && !BAD_KW.has(w) && !candidates.some(c => c.word === w)) {
+      // Skip verb forms — they make bad template fills
+      if (VERB_SUFFIXES.test(w)) continue;
+      // Skip 3rd person forms of known verbs (breaks→break, sustains→sustain)
+      if (w.endsWith('s') && w.length > 4 && (IMP_VERBS.has(w.slice(0,-1)) || BAD_KW.has(w.slice(0,-1)))) continue;
+      if (w.endsWith('es') && w.length > 5 && (IMP_VERBS.has(w.slice(0,-2)) || BAD_KW.has(w.slice(0,-2)))) continue;
+      const nounScore = (_nounScores[w] || 0) + (NOUN_SUFFIXES.test(w) ? 2 : 0);
+      const isAdj = ADJ_SUFFIXES.test(w);
+      candidates.push({ word: w, nounScore, isAdj });
+    }
+    if (candidates.length >= 6) break;
   }
-  // Pass 2: relax to 3-char words
+  // Sort by noun score descending — best nouns first
+  candidates.sort((a, b) => b.nounScore - a.nounScore);
+  for (const c of candidates) {
+    if (keywords.length < 4) keywords.push(c.word);
+    if (c.isAdj) { if (!adjectives.includes(c.word)) adjectives.push(c.word); }
+    else { if (!nouns.includes(c.word)) nouns.push(c.word); }
+  }
+
+  // Pass 2: relax to 3-char words (still check BAD_KW to prevent verb/adverb leaks)
   if (keywords.length === 0) {
     for (const w of lower) {
-      if (w.length > 2 && !STOP.has(w) && !PLACEHOLDER.has(w) && !keywords.includes(w)) keywords.push(w);
+      if (w.length > 2 && !BAD_KW.has(w) && !keywords.includes(w)) keywords.push(w);
       if (keywords.length >= 2) break;
     }
   }
-  // Pass 3: desperate — use card's main subject
+  // Pass 3: desperate
   if (keywords.length === 0) {
     keywords.push(lower.find(w => w.length > 2) || 'work');
   }
+  if (nouns.length === 0) nouns.push(keywords[0] || 'work');
 
-  return { verb, object, keywords, raw: text };
+  return { verb, object, keywords, nouns, adjectives, raw: text };
 }
 
 // Strategy classification from directive text
@@ -530,67 +580,67 @@ function classifyDirective(text) {
   return best;
 }
 
-// Templates per strategy
+// Templates per strategy (anti-corniness: no void/silence/shadow/echo/chaos fallbacks)
 const TEMPLATES = {
   devour: [
-    (a, b) => a.verb ? `${capitalize(a.verb)} ${b.object || b.keywords[0] || 'the form'} until it dissolves` : null,
-    (a, b) => `Let ${a.keywords[0] || 'silence'} swallow ${b.keywords[0] || 'sound'} whole`,
+    (a, b) => a.verb && !['let','get','put','set'].includes(a.verb) ? `${capitalize(a.verb)} ${b.object || b.keywords[0] || 'the form'} until it dissolves` : null,
+    (a, b) => `Let ${a.keywords[0] || 'the structure'} absorb ${b.keywords[0] || 'the material'} whole`,
     (a, b) => a.verb && b.verb ? `${capitalize(a.verb)} what ${b.verb}s` : null,
-    (a, b) => `Feed ${b.keywords[0] || 'the work'} to ${a.keywords[0] || 'the void'}`,
+    (a, b) => `Feed ${b.keywords[0] || 'the work'} to ${a.keywords[0] || 'the process'}`,
     (a, b) => `What survives when ${a.keywords[0] || 'form'} consumes ${b.keywords[0] || 'content'}?`,
     (a, b) => a.verb && b.verb ? `${capitalize(a.verb)} it bare. Now ${b.verb} from the residue` : null,
-    (a, b) => `The ${a.keywords[0] || 'signal'} eats the ${b.keywords[0] || 'noise'} alive`,
-    (a, b) => `Dissolve ${a.keywords[0] || 'the structure'}. Keep only ${b.keywords[0] || 'the echo'}`,
+    (a, b) => `Replace ${b.keywords[0] || 'the detail'} entirely with ${a.keywords[0] || 'the structure'}`,
+    (a, b) => `Dissolve ${a.keywords[0] || 'the framework'}. Keep only ${b.keywords[0] || 'the residue'}`,
   ],
   fuse: [
     (a, b) => a.verb && b.verb ? `Where ${a.verb} meets ${b.verb}, stay there` : null,
-    (a, b) => `Half ${a.keywords[0] || 'signal'}, half ${b.keywords[0] || 'silence'} -- commit to neither`,
-    (a, b) => `The child of ${a.keywords[0] || 'order'} and ${b.keywords[0] || 'chaos'}`,
-    (a, b) => `Merge ${a.keywords[0] || 'familiar'} with ${b.keywords[0] || 'alien'}`,
-    (a, b) => a.verb && b.verb ? `What ${a.verb}s and ${b.verb}s at the same time?` : null,
-    (a, b) => `Neither ${a.keywords[0] || 'signal'} nor ${b.keywords[0] || 'silence'} -- the thing between`,
-    (a, b) => `${a.keywords[0] || 'Form'} and ${b.keywords[0] || 'void'} walk into a room. Only one leaves`,
-    (a, b) => a.verb ? `${capitalize(a.verb)} until ${b.keywords[0] || 'silence'} answers back` : null,
+    (a, b) => `Half ${a.keywords[0] || 'controlled'}, half ${b.keywords[0] || 'accidental'} -- commit to neither`,
+    (a, b) => `The child of ${a.keywords[0] || 'method'} and ${b.keywords[0] || 'accident'}`,
+    (a, b) => `Merge ${a.keywords[0] || 'familiar'} with ${b.keywords[0] || 'foreign'}`,
+    (a, b) => a.verb && b.verb ? `What if you ${a.verb} and ${b.verb} at the same time?` : null,
+    (a, b) => `Neither ${a.keywords[0] || 'this'} nor ${b.keywords[0] || 'that'} -- the thing between`,
+    (a, b) => `Half ${a.keywords[0] || 'intent'}, half ${b.keywords[0] || 'mistake'} -- which half wins?`,
+    (a, b) => a.verb && a.keywords[0] ? `${capitalize(a.verb)} ${a.keywords[0]} until ${b.keywords[0] || 'the material'} answers back` : null,
   ],
   translate: [
-    (a, b) => a.verb ? `${capitalize(a.verb)} it in the language of ${b.keywords[0] || 'silence'}` : null,
-    (a, b) => `How would ${b.keywords[0] || 'water'} express ${a.keywords[0] || 'fire'}?`,
+    (a, b) => a.verb ? `${capitalize(a.verb)} it in the language of ${b.keywords[0] || 'the body'}` : null,
+    (a, b) => `How would ${b.keywords[0] || 'a child'} express ${a.keywords[0] || 'urgency'}?`,
     (a, b) => `Rewrite ${a.keywords[0] || 'the rules'} using only ${b.keywords[0] || 'gestures'}`,
-    (a, b) => b.verb ? `${capitalize(b.verb)} ${a.keywords[0] || 'the signal'} into ${b.keywords[0] || 'light'}` : null,
-    (a, b) => `What does ${a.keywords[0] || 'sound'} become in ${b.keywords[0] || 'foreign'} hands?`,
+    (a, b) => b.verb ? `${capitalize(b.verb)} ${a.keywords[0] || 'the signal'} into ${b.keywords[0] || 'a different medium'}` : null,
+    (a, b) => `What does ${a.keywords[0] || 'sound'} become when ${b.keywords[0] || 'urgency'} takes over?`,
     (a, b) => `Misinterpret ${a.keywords[0] || 'the original'} on purpose`,
-    (a, b) => `Say ${a.keywords[0] || 'the unsaid'} in the voice of ${b.keywords[0] || 'a stranger'}`,
+    (a, b) => `Say ${a.keywords[0] || 'the difficult part'} in the voice of ${b.keywords[0] || 'someone who hates it'}`,
     (a, b) => `${capitalize(a.keywords[0] || 'Form')} translated badly is still ${b.keywords[0] || 'form'}`,
   ],
   invert: [
-    (a, b) => a.verb && b.verb ? `What ${a.verb}s hides. What ${b.verb}s reveals` : null,
+    (a, b) => a.verb && b.verb ? `${capitalize(a.verb)} what hides. ${capitalize(b.verb)} what reveals` : null,
     (a, b) => `Do the opposite of ${a.keywords[0] || 'order'}. Keep the ${b.keywords[0] || 'residue'}`,
-    (a, b) => `${capitalize(a.keywords[0] || 'Light')} is the shadow of ${b.keywords[0] || 'dark'}`,
+    (a, b) => `${capitalize(a.keywords[0] || 'Precision')} pretends to be ${b.keywords[0] || 'roughness'}. Call it out`,
     (a, b) => a.verb ? `The wrong way to ${a.verb} ${b.keywords[0] || 'it'} is the right way` : null,
     (a, b) => `Turn ${a.keywords[0] || 'strength'} into ${b.keywords[0] || 'weakness'} -- is it better?`,
     (a, b) => `Everything you know about ${a.keywords[0] || 'form'} is wrong`,
     (a, b) => `Reverse the ${a.keywords[0] || 'process'}. Start from ${b.keywords[0] || 'the end'}`,
-    (a, b) => `The opposite of ${a.keywords[0] || 'beauty'} is not ${b.keywords[0] || 'ugliness'}`,
+    (a, b) => `The opposite of ${a.keywords[0] || 'precision'} is not ${b.keywords[0] || 'roughness'}`,
   ],
   metaphor: [
-    (a, b) => b.verb ? `Dream of ${a.keywords[0] || 'silence'} while you ${b.verb}` : null,
-    (a, b) => `${capitalize(a.keywords[0] || 'Sound')} is a container for ${b.keywords[0] || 'silence'}`,
+    (a, b) => b.verb ? `Think about ${a.keywords[0] || 'the work'} while you ${b.verb}` : null,
+    (a, b) => `${capitalize(a.keywords[0] || 'Sound')} is a container for ${b.keywords[0] || 'the raw material'}`,
     (a, b) => `The map says ${a.keywords[0] || 'here'}. The territory says ${b.keywords[0] || 'elsewhere'}`,
     (a, b) => `Treat ${a.keywords[0] || 'the work'} as if it were ${b.keywords[0] || 'alive'}`,
-    (a, b) => `What orbit does ${a.keywords[0] || 'form'} trace around ${b.keywords[0] || 'void'}?`,
-    (a, b) => `${capitalize(a.keywords[0] || 'Memory')} is the rhythm. ${capitalize(b.keywords[0] || 'Silence')} is the pause`,
-    (a, b) => `If ${a.keywords[0] || 'sound'} were weather, describe the storm`,
+    (a, b) => `What orbit does ${a.keywords[0] || 'form'} trace around ${b.keywords[0] || 'the difficult part'}?`,
+    (a, b) => `${capitalize(a.keywords[0] || 'Rhythm')} is the structure. ${capitalize(b.keywords[0] || 'Space')} is the pause`,
+    (a, b) => `If ${a.keywords[0] || 'this'} had weight, how heavy would ${b.keywords[0] || 'it'} make it?`,
     (a, b) => b.verb ? `${capitalize(b.verb)} ${a.keywords[0] || 'the work'} like a secret` : `Carry ${a.keywords[0] || 'the work'} like a secret`,
   ],
   collide: [
-    (a, b) => `Crash ${a.keywords[0] || 'order'} into ${b.keywords[0] || 'chaos'} -- use what survives`,
-    (a, b) => a.verb ? `${capitalize(a.verb)} ${a.keywords[0] || 'form'} at ${b.keywords[0] || 'void'}. Keep the shrapnel` : null,
+    (a, b) => `Crash ${a.keywords[0] || 'order'} into ${b.keywords[0] || 'accident'} -- use what survives`,
+    (a, b) => a.verb ? `${capitalize(a.verb)} ${a.keywords[0] || 'form'} at ${b.keywords[0] || 'full speed'}. Keep the shrapnel` : null,
     (a, b) => `Maximum velocity: ${a.keywords[0] || 'signal'} meets ${b.keywords[0] || 'static'}`,
-    (a, b) => `The debris of ${a.keywords[0] || 'method'} and ${b.keywords[0] || 'madness'} is the material`,
+    (a, b) => `The debris of ${a.keywords[0] || 'method'} and ${b.keywords[0] || 'instinct'} is the material`,
     (a, b) => `Stack ${a.keywords[0] || 'layers'}. Remove ${b.keywords[0] || 'the foundation'}`,
-    (a, b) => `Smash them together. The sparks are the work`,
+    (a, b) => `Force ${a.keywords[0] || 'the elements'} together. Keep only what fused`,
     (a, b) => `${capitalize(a.keywords[0] || 'Form')} and ${b.keywords[0] || 'content'} collide. Pick through the wreckage`,
-    (a, b) => `Throw ${a.keywords[0] || 'precision'} against ${b.keywords[0] || 'chaos'}`,
+    (a, b) => `Throw ${a.keywords[0] || 'precision'} against ${b.keywords[0] || 'the opposite'}`,
   ],
 };
 
@@ -687,6 +737,17 @@ function qualityGate(text) {
   for (const existing of _existingLower) {
     if (levenshtein(lower, existing) < 5) return false;
   }
+  // Fix 5: Grammar post-check — catch broken syntax
+  const BROKEN_PATTERNS = [
+    /\b(the|a|an)\s+(make|do|use|try|take|give|break|steal|build|write|play|set|run|turn|show)\b/i,
+    /\b(of|in|to|from|with)\s+(is|are|was|were)\b/i,
+    /\b(its|your|their|our)\s*[.!?]?\s*$/,
+    /\b(\w+)\s+\1\b/i,
+    /\b(the|a)\s+(the|a)\b/i,
+  ];
+  for (const pattern of BROKEN_PATTERNS) {
+    if (pattern.test(text)) return false;
+  }
   // Not a recent mutation
   if (_recentMutations.includes(lower)) return false;
   return true;
@@ -725,12 +786,17 @@ function generateMutation(cardA, cardB, directive) {
   const strategyOrder = [strategy, ...Object.keys(TEMPLATES).filter(s => s !== strategy)];
   for (const strat of strategyOrder.slice(0, 3)) {
     const templates = TEMPLATES[strat] || TEMPLATES.fuse;
-    const shuffled = [...templates].sort(() => Math.random() - 0.5);
-    for (const tmpl of shuffled) {
+    // Fix 2: Template fingerprint dedup — skip recently used templates
+    const indexed = templates.map((t, i) => ({ tmpl: t, id: strat + ':' + i }));
+    const shuffled = indexed.sort(() => Math.random() - 0.5);
+    for (const { tmpl, id } of shuffled) {
+      if (_recentTemplateIds.includes(id)) continue;
       const result = tmpl(pA, pB);
       if (result && qualityGate(result)) {
         const final = capitalize(result);
         recordMutation(final);
+        _recentTemplateIds.push(id);
+        if (_recentTemplateIds.length > 5) _recentTemplateIds.shift();
         return { text: final, layer: 'template' };
       }
     }
